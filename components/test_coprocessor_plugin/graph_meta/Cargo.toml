@@ -1,0 +1,15 @@
+[package]
+name = "graph_meta_plugin"
+version = "0.1.4"
+edition = "2018"
+publish = false
+
+[lib]
+crate-type = ["dylib"]
+
+[dependencies]
+coprocessor_plugin_api = { path = "../../coprocessor_plugin_api" }
+log = "0.4"
+futures = "0.3"
+protobuf = { version = "3.1", features = ["bytes"] }
+lazy_static = "1.4.0"

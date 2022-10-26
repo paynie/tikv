@@ -5,7 +5,7 @@ use std::{collections::HashMap, marker::PhantomData};
 use api_version::{KeyMode, KvFormat, RawValue};
 use engine_traits::{Range, Result, TtlProperties, TtlPropertiesExt};
 use rocksdb::{DBEntryType, TablePropertiesCollector, TablePropertiesCollectorFactory};
-use tikv_util::error;
+use tikv_util::{error, info};
 
 use crate::{decode_properties::DecodeProperties, RocksEngine, UserProperties};
 
@@ -64,7 +64,8 @@ pub struct TtlPropertiesCollector<F: KvFormat> {
 
 impl<F: KvFormat> TablePropertiesCollector for TtlPropertiesCollector<F> {
     fn add(&mut self, key: &[u8], value: &[u8], entry_type: DBEntryType, _: u64, _: u64) {
-        if entry_type != DBEntryType::Put {
+        if entry_type != DBEntryType::Put && entry_type != DBEntryType::BlobIndex {
+            // Also collect ttl for titan index
             return;
         }
         // Only consider data keys.
@@ -96,7 +97,9 @@ impl<F: KvFormat> TablePropertiesCollector for TtlPropertiesCollector<F> {
                     "err" => %err,
                 );
             }
-            _ => {}
+            _ => {
+                //info!("return as not matched");
+            }
         }
     }
 

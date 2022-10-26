@@ -11,6 +11,8 @@ pub(crate) mod check_txn_status;
 pub(crate) mod cleanup;
 pub(crate) mod commit;
 pub(crate) mod compare_and_swap;
+pub(crate) mod set_ttl;
+pub(crate) mod write_with_version;
 pub(crate) mod mvcc_by_key;
 pub(crate) mod mvcc_by_start_ts;
 pub(crate) mod pause;
@@ -36,6 +38,8 @@ pub use check_txn_status::CheckTxnStatus;
 pub use cleanup::Cleanup;
 pub use commit::Commit;
 pub use compare_and_swap::RawCompareAndSwap;
+pub use set_ttl::RawSetKeyTTL;
+pub use write_with_version::RawWriteWithVersion;
 use concurrency_manager::{ConcurrencyManager, KeyHandleGuard};
 use kvproto::kvrpcpb::*;
 pub use mvcc_by_key::MvccByKey;
@@ -90,6 +94,8 @@ pub enum Command {
     MvccByStartTs(MvccByStartTs),
     RawCompareAndSwap(RawCompareAndSwap),
     RawAtomicStore(RawAtomicStore),
+    RawSetKeyTTL(RawSetKeyTTL),
+    RawWriteWithVersion(RawWriteWithVersion),
 }
 
 /// A `Command` with its return type, reified as the generic parameter `T`.
@@ -558,6 +564,8 @@ impl Command {
             Command::MvccByStartTs(t) => t,
             Command::RawCompareAndSwap(t) => t,
             Command::RawAtomicStore(t) => t,
+            Command::RawSetKeyTTL(t) => t,
+            Command::RawWriteWithVersion(t) => t,
         }
     }
 
@@ -581,6 +589,8 @@ impl Command {
             Command::MvccByStartTs(t) => t,
             Command::RawCompareAndSwap(t) => t,
             Command::RawAtomicStore(t) => t,
+            Command::RawSetKeyTTL(t) => t,
+            Command::RawWriteWithVersion(t) => t,
         }
     }
 
@@ -618,6 +628,8 @@ impl Command {
             Command::Pause(t) => t.process_write(snapshot, context),
             Command::RawCompareAndSwap(t) => t.process_write(snapshot, context),
             Command::RawAtomicStore(t) => t.process_write(snapshot, context),
+            Command::RawSetKeyTTL(t) => t.process_write(snapshot, context),
+            Command::RawWriteWithVersion(t) => t.process_write(snapshot, context),
             _ => panic!("unsupported write command"),
         }
     }

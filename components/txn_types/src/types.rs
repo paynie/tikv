@@ -117,6 +117,20 @@ impl Key {
         self
     }
 
+    /// Creates a new key by appending a `u64` timestamp to this key.
+    #[inline]
+    pub fn append_zero(mut self) -> Key {
+        self.0.encode_i32_le(0).unwrap();
+        self
+    }
+
+    /// Creates a new key by appending a `u64` timestamp to this key.
+    #[inline]
+    pub fn get_version_key(&self) -> Key {
+        let version_key = self.clone();
+        version_key.append_zero()
+    }
+
     /// Gets the timestamp contained in this key.
     ///
     /// Preconditions: the caller must ensure this is actually a timestamped

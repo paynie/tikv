@@ -64,9 +64,6 @@ impl<F: KvFormat> CompactionFilter for TtlCompactionFilter<F> {
         value: &[u8],
         value_type: CompactionFilterValueType,
     ) -> CompactionFilterDecision {
-        if value_type != CompactionFilterValueType::Value {
-            return CompactionFilterDecision::Keep;
-        }
         // Only consider data keys.
         if !key.starts_with(keys::DATA_PREFIX_KEY) {
             return CompactionFilterDecision::Keep;
