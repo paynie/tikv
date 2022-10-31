@@ -105,7 +105,7 @@ use crate::{
         metrics::{CommandKind, *},
         mvcc::{MvccReader, PointGetterBuilder},
         txn::{
-            commands::{RawAtomicStore, RawCompareAndSwap, TypedCommand},
+            commands::{RawAtomicStore, RawCompareAndSwap, TypedCommand, RawSetKeyTTL, RawWriteWithVersion},
             flow_controller::FlowController,
             scheduler::Scheduler as TxnScheduler,
             Command,
@@ -385,6 +385,7 @@ impl<E: Engine, L: LockManager, F: KvFormat> Storage<E, L, F> {
                 | CommandKind::raw_delete_range
                 | CommandKind::raw_batch_delete
                 | CommandKind::raw_get_key_ttl
+                | CommandKind::raw_set_key_ttl
                 | CommandKind::raw_compare_and_swap
                 | CommandKind::raw_atomic_store
                 | CommandKind::raw_checksum
@@ -1815,19 +1816,23 @@ impl<E: Engine, L: LockManager, F: KvFormat> Storage<E, L, F> {
         let modifies = pairs
             .into_iter()
             .zip(ttls)
-            .map(|((k, v), ttl)| {
+            .flat_map(|((k, v), ttl)| {
                 let raw_value = RawValue {
                     user_value: v,
                     expire_ts: ttl_to_expire_ts(ttl),
                     is_delete: false,
                 };
-                Modify::Put(
+
+                let m = Modify::Put(
                     cf,
                     F::encode_raw_key_owned(k, None),
                     F::encode_raw_value_owned(raw_value),
-                )
-            })
-            .collect();
+                );
+
+                vec![m]
+            }).collect();
+
+
         Ok(modifies)
     }
 
@@ -1875,6 +1880,23 @@ impl<E: Engine, L: LockManager, F: KvFormat> Storage<E, L, F> {
             _ => Modify::Delete(cf, key),
         }
     }
+
+    fn raw_delete_request_to_modify_with_version(cf: CfName, key: Vec<u8>) -> Vec<Modify> {
+        let key = F::encode_raw_key_owned(key, None);
+        let version_key = key.get_version_key();
+
+        let d = match F::TAG {
+            ApiVersion::V2 => Modify::Put(cf, key, ApiV2::ENCODED_LOGICAL_DELETE.to_vec()),
+            _ => Modify::Delete(cf, key),
+        };
+        let d_version = match F::TAG {
+            ApiVersion::V2 => Modify::Put(cf, version_key, ApiV2::ENCODED_LOGICAL_DELETE.to_vec()),
+            _ => Modify::Delete(cf, version_key),
+        };
+
+        vec![d, d_version]
+    }
+
 
     /// Delete a raw key from the storage.
     /// In API V2, data is "logical" deleted, to enable CDC of delete operations.
@@ -2360,6 +2382,7 @@ impl<E: Engine, L: LockManager, F: KvFormat> Storage<E, L, F> {
         value: Vec<u8>,
         ttl: u64,
         cb: Callback<(Option<Value>, bool)>,
+        enable_write_with_version: bool,
     ) -> Result<()> {
         Self::check_api_version(
             self.api_version,
@@ -2375,7 +2398,7 @@ impl<E: Engine, L: LockManager, F: KvFormat> Storage<E, L, F> {
 
         let key = F::encode_raw_key_owned(key, None);
         let cmd =
-            RawCompareAndSwap::new(cf, key, previous_value, value, ttl, self.api_version, ctx);
+            RawCompareAndSwap::new(cf, key, previous_value, value, ttl, self.api_version, enable_write_with_version, ctx);
         self.sched_txn_command(cmd, cb)
     }
 
@@ -2386,6 +2409,7 @@ impl<E: Engine, L: LockManager, F: KvFormat> Storage<E, L, F> {
         pairs: Vec<KvPair>,
         ttls: Vec<u64>,
         callback: Callback<()>,
+        enable_write_with_version: bool,
     ) -> Result<()> {
         Self::check_api_version(
             self.api_version,
@@ -2395,8 +2419,50 @@ impl<E: Engine, L: LockManager, F: KvFormat> Storage<E, L, F> {
         )?;
 
         let cf = Self::rawkv_cf(&cf, self.api_version)?;
-        let modifies = Self::raw_batch_put_requests_to_modifies(cf, pairs, ttls)?;
-        let cmd = RawAtomicStore::new(cf, modifies, ctx);
+        
+        if enable_write_with_version {
+            // Check ttls
+            if !F::IS_TTL_ENABLED {
+                if ttls.iter().any(|&x| x != 0) {
+                    return Err(Error::from(ErrorInner::TtlNotEnabled));
+                }
+            } else if ttls.len() != pairs.len() {
+                return Err(Error::from(ErrorInner::TtlLenNotEqualsToPairs));
+            }
+
+            // Transform KvPair to (Key, Value)
+            let kvs = pairs.into_iter().flat_map(|(k, v)| {
+                let kv = (F::encode_raw_key_owned(k, None), v);
+                vec![kv]
+            }).collect();
+            let cmd = RawWriteWithVersion::new(cf, kvs, ttls, self.api_version, ctx);
+            self.sched_txn_command(cmd, callback)
+
+        } else {
+            let modifies = Self::raw_batch_put_requests_to_modifies(cf, pairs, ttls)?;
+            let cmd = RawAtomicStore::new(cf, modifies, ctx);
+            self.sched_txn_command(cmd, callback)
+        }
+    }
+
+    pub fn raw_batch_set_ttl_atomic(
+        &self,
+        ctx: Context,
+        cf: String,
+        key: Vec<u8>,
+        ttl: u64,
+        callback: Callback<()>,
+    ) -> Result<()> {
+        let keys = vec![&key];
+        Self::check_api_version(
+            self.api_version,
+            ctx.api_version,
+            CommandKind::raw_set_key_ttl,
+            &keys,
+        )?;
+
+        let cf = Self::rawkv_cf(&cf, self.api_version)?;
+        let cmd = RawSetKeyTTL::new(cf, Key::from_encoded(key), ttl, self.api_version, ctx);
         self.sched_txn_command(cmd, callback)
     }
 
@@ -2406,6 +2472,7 @@ impl<E: Engine, L: LockManager, F: KvFormat> Storage<E, L, F> {
         cf: String,
         keys: Vec<Vec<u8>>,
         callback: Callback<()>,
+        enable_write_with_version: bool,
     ) -> Result<()> {
         Self::check_api_version(
             self.api_version,
@@ -2415,10 +2482,18 @@ impl<E: Engine, L: LockManager, F: KvFormat> Storage<E, L, F> {
         )?;
 
         let cf = Self::rawkv_cf(&cf, self.api_version)?;
-        let modifies = keys
+        let modifies = if enable_write_with_version {
+            keys
+            .into_iter()
+            .flat_map(|k| Self::raw_delete_request_to_modify_with_version(cf, k))
+            .collect()
+        } else {
+            keys
             .into_iter()
             .map(|k| Self::raw_delete_request_to_modify(cf, k))
-            .collect();
+            .collect()
+        };
+
         let cmd = RawAtomicStore::new(cf, modifies, ctx);
         self.sched_txn_command(cmd, callback)
     }
@@ -2427,8 +2502,9 @@ impl<E: Engine, L: LockManager, F: KvFormat> Storage<E, L, F> {
         &self,
         ctx: Context,
         algorithm: ChecksumAlgorithm,
-        mut ranges: Vec<KeyRange>,
+        ranges: Vec<KeyRange>,
     ) -> impl Future<Output = Result<(u64, u64, u64)>> {
+        // TODO: Modify this method in another PR for backup & restore feature of Api V2.
         const CMD: CommandKind = CommandKind::raw_checksum;
         let priority = ctx.get_priority();
         let priority_tag = get_priority_tag(priority);
@@ -2460,12 +2536,6 @@ impl<E: Engine, L: LockManager, F: KvFormat> Storage<E, L, F> {
                         .iter()
                         .map(|range| (Some(range.get_start_key()), Some(range.get_end_key()))),
                 )?;
-                for range in ranges.iter_mut() {
-                    let start_key = F::encode_raw_key_owned(range.take_start_key(), None);
-                    let end_key = F::encode_raw_key_owned(range.take_end_key(), None);
-                    range.set_start_key(start_key.into_encoded());
-                    range.set_end_key(end_key.into_encoded());
-                }
 
                 let command_duration = tikv_util::time::Instant::now_coarse();
                 let snap_ctx = SnapContext {
@@ -4543,7 +4613,6 @@ mod tests {
         let mut checksum: u64 = 0;
         let mut total_kvs: u64 = 0;
         let mut total_bytes: u64 = 0;
-        let mut is_first = true;
         // Write key-value pairs one by one
         for &(ref key, ref value) in &test_data {
             storage
@@ -4556,18 +4625,13 @@ mod tests {
                     expect_ok_callback(tx.clone(), 0),
                 )
                 .unwrap();
-            // start key is set to b"r\0a\0", if raw_checksum does not encode the key,
-            // first key will be included in checksum. This is for testing issue #12950.
-            if !is_first {
-                total_kvs += 1;
-                total_bytes += (key.len() + value.len()) as u64;
-                checksum = checksum_crc64_xor(checksum, digest.clone(), key, value);
-            }
-            is_first = false;
+            total_kvs += 1;
+            total_bytes += (key.len() + value.len()) as u64;
+            checksum = checksum_crc64_xor(checksum, digest.clone(), key, value);
             rx.recv().unwrap();
         }
         let mut range = KeyRange::default();
-        range.set_start_key(b"r\0a\0".to_vec());
+        range.set_start_key(b"r\0a".to_vec());
         range.set_end_key(b"r\0z".to_vec());
         assert_eq!(
             (checksum, total_kvs, total_bytes),

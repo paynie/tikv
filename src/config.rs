@@ -172,13 +172,13 @@ impl TitanCfConfig {
         opts.set_min_gc_batch_size(self.min_gc_batch_size.0 as u64);
         opts.set_max_gc_batch_size(self.max_gc_batch_size.0 as u64);
         opts.set_discardable_ratio(self.discardable_ratio);
-        opts.set_sample_ratio(self.sample_ratio);
+        //opts.set_sample_ratio(self.sample_ratio);
         opts.set_merge_small_file_threshold(self.merge_small_file_threshold.0 as u64);
         opts.set_blob_run_mode(self.blob_run_mode.into());
         opts.set_level_merge(self.level_merge);
         opts.set_range_merge(self.range_merge);
         opts.set_max_sorted_runs(self.max_sorted_runs);
-        opts.set_gc_merge_rewrite(self.gc_merge_rewrite);
+        //opts.set_gc_merge_rewrite(self.gc_merge_rewrite);
         opts
     }
 }

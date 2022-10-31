@@ -93,6 +93,9 @@ pub struct Service<T: RaftStoreRouter<E::Local> + 'static, E: Engine, L: LockMan
 
     // Go `server::Config` to get more details.
     reject_messages_on_memory_ratio: f64,
+
+    // Write version key or not, version key used to save value versions, it is used to optimize io for cas
+    enable_write_with_version: bool,
 }
 
 impl<
@@ -116,6 +119,7 @@ impl<
             grpc_thread_load: self.grpc_thread_load.clone(),
             proxy: self.proxy.clone(),
             reject_messages_on_memory_ratio: self.reject_messages_on_memory_ratio,
+            enable_write_with_version: self.enable_write_with_version,
         }
     }
 }
@@ -137,6 +141,7 @@ impl<T: RaftStoreRouter<E::Local> + 'static, E: Engine, L: LockManager, F: KvFor
         enable_req_batch: bool,
         proxy: Proxy,
         reject_messages_on_memory_ratio: f64,
+        enable_write_with_version: bool
     ) -> Self {
         Service {
             store_id,
@@ -151,6 +156,7 @@ impl<T: RaftStoreRouter<E::Local> + 'static, E: Engine, L: LockManager, F: KvFor
             grpc_thread_load,
             proxy,
             reject_messages_on_memory_ratio,
+            enable_write_with_version
         }
     }
 
@@ -338,6 +344,13 @@ impl<T: RaftStoreRouter<E::Local> + 'static, E: Engine, L: LockManager, F: KvFor
         future_raw_get_key_ttl,
         RawGetKeyTtlRequest,
         RawGetKeyTtlResponse
+    );
+
+    handle_request!(
+        raw_set_key_ttl,
+        future_raw_set_key_ttl,
+        RawSetKeyTtlRequest,
+        RawSetKeyTtlResponse
     );
 
     handle_request!(
@@ -1552,6 +1565,7 @@ fn future_raw_put<E: Engine, L: LockManager, F: KvFormat>(
 ) -> impl Future<Output = ServerResult<RawPutResponse>> {
     let (cb, f) = paired_future_callback();
     let for_atomic = req.get_for_cas();
+
     let res = if for_atomic {
         storage.raw_batch_put_atomic(
             req.take_context(),
@@ -1559,6 +1573,7 @@ fn future_raw_put<E: Engine, L: LockManager, F: KvFormat>(
             vec![(req.take_key(), req.take_value())],
             vec![req.get_ttl()],
             cb,
+            true,
         )
     } else {
         storage.raw_put(
@@ -1577,6 +1592,36 @@ fn future_raw_put<E: Engine, L: LockManager, F: KvFormat>(
             Ok(_) => f.await?,
         };
         let mut resp = RawPutResponse::default();
+        if let Some(err) = extract_region_error(&v) {
+            resp.set_region_error(err);
+        } else if let Err(e) = v {
+            resp.set_error(format!("{}", e));
+        }
+        Ok(resp)
+    }
+}
+
+fn future_raw_set_key_ttl<E: Engine, L: LockManager, F: KvFormat>(
+    storage: &Storage<E, L, F>,
+    mut req: RawSetKeyTtlRequest,
+) -> impl Future<Output = ServerResult<RawSetKeyTtlResponse>> {
+    let (cb, f) = paired_future_callback();
+
+    // Set ttl operator must use atomic mode
+    let res = storage.raw_batch_set_ttl_atomic(
+        req.take_context(),
+        req.take_cf(),
+        req.take_key(),
+        req.get_ttl(),
+        cb,
+    );
+
+    async move {
+        let v = match res {
+            Err(e) => Err(e),
+            Ok(_) => f.await?,
+        };
+        let mut resp = RawSetKeyTtlResponse::default();
         if let Some(err) = extract_region_error(&v) {
             resp.set_region_error(err);
         } else if let Err(e) = v {
@@ -1612,8 +1657,9 @@ fn future_raw_batch_put<E: Engine, L: LockManager, F: KvFormat>(
 
     let (cb, f) = paired_future_callback();
     let for_atomic = req.get_for_cas();
+
     let res = if for_atomic {
-        storage.raw_batch_put_atomic(req.take_context(), cf, pairs, ttls, cb)
+        storage.raw_batch_put_atomic(req.take_context(), cf, pairs, ttls, cb, true)
     } else {
         storage.raw_batch_put(req.take_context(), cf, pairs, ttls, cb)
     };
@@ -1640,7 +1686,7 @@ fn future_raw_delete<E: Engine, L: LockManager, F: KvFormat>(
     let (cb, f) = paired_future_callback();
     let for_atomic = req.get_for_cas();
     let res = if for_atomic {
-        storage.raw_batch_delete_atomic(req.take_context(), req.take_cf(), vec![req.take_key()], cb)
+        storage.raw_batch_delete_atomic(req.take_context(), req.take_cf(), vec![req.take_key()], cb, true)
     } else {
         storage.raw_delete(req.take_context(), req.take_cf(), req.take_key(), cb)
     };
@@ -1669,7 +1715,7 @@ fn future_raw_batch_delete<E: Engine, L: LockManager, F: KvFormat>(
     let (cb, f) = paired_future_callback();
     let for_atomic = req.get_for_cas();
     let res = if for_atomic {
-        storage.raw_batch_delete_atomic(req.take_context(), cf, keys, cb)
+        storage.raw_batch_delete_atomic(req.take_context(), cf, keys, cb, true)
     } else {
         storage.raw_batch_delete(req.take_context(), cf, keys, cb)
     };
@@ -1813,6 +1859,7 @@ fn future_raw_compare_and_swap<E: Engine, L: LockManager, F: KvFormat>(
         req.take_value(),
         req.get_ttl(),
         cb,
+        true,
     );
     async move {
         let v = match res {

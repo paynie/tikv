@@ -466,7 +466,7 @@ dependencies = [
  "openssl",
  "pd_client",
  "prometheus",
- "protobuf",
+ "protobuf 2.8.0",
  "raft",
  "raftstore",
  "rand 0.8.3",
@@ -640,9 +640,9 @@ checksum = "08c48aae112d48ed9f069b33538ea9e3e90aa263cfa3d1c24309612b1f7472de"
 
 [[package]]
 name = "bytes"
-version = "1.0.1"
+version = "1.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b700ce4376041dcd0a327fd0097c41095743c4c8af8887265942faf1100bd040"
+checksum = "ec8a7b6a70fde80372154c65702f00a0f56f3e1c36abbc6c440484be248856db"
 dependencies = [
  "serde",
 ]
@@ -770,7 +770,7 @@ dependencies = [
  "pd_client",
  "prometheus",
  "prometheus-static-metric",
- "protobuf",
+ "protobuf 2.8.0",
  "raft",
  "raftstore",
  "resolved_ts",
@@ -910,7 +910,7 @@ dependencies = [
  "lazy_static",
  "openssl",
  "prometheus",
- "protobuf",
+ "protobuf 2.8.0",
  "rusoto_core",
  "thiserror",
  "tikv_util",
@@ -935,7 +935,7 @@ dependencies = [
  "error_code",
  "libc 0.2.125",
  "panic_hook",
- "protobuf",
+ "protobuf 2.8.0",
  "rand 0.8.3",
  "static_assertions",
  "thiserror",
@@ -1043,7 +1043,7 @@ dependencies = [
  "clap 2.33.0",
  "criterion-plot",
  "csv",
- "itertools 0.10.0",
+ "itertools",
  "lazy_static",
  "num-traits",
  "oorandom",
@@ -1085,7 +1085,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d00996de9f2f7559f7f4dc286073197f83e92256a59ed395f9aac01fe717da57"
 dependencies = [
  "cast",
- "itertools 0.10.0",
+ "itertools",
 ]
 
 [[package]]
@@ -1398,7 +1398,7 @@ dependencies = [
  "online_config",
  "openssl",
  "prometheus",
- "protobuf",
+ "protobuf 2.8.0",
  "rand 0.8.3",
  "serde",
  "serde_derive",
@@ -1426,7 +1426,7 @@ dependencies = [
  "file_system",
  "kvproto",
  "openssl",
- "protobuf",
+ "protobuf 2.8.0",
  "rust-ini",
  "slog",
  "slog-global",
@@ -1466,7 +1466,7 @@ dependencies = [
  "online_config",
  "prometheus",
  "prometheus-static-metric",
- "protobuf",
+ "protobuf 2.8.0",
  "raft",
  "rand 0.8.3",
  "regex",
@@ -1497,7 +1497,7 @@ dependencies = [
  "lazy_static",
  "pd_client",
  "prometheus",
- "protobuf",
+ "protobuf 2.8.0",
  "raftstore",
  "slog",
  "slog-global",
@@ -1530,7 +1530,7 @@ dependencies = [
  "file_system",
  "kvproto",
  "log_wrappers",
- "protobuf",
+ "protobuf 2.8.0",
  "raft",
  "serde",
  "serde_derive",
@@ -1626,6 +1626,7 @@ name = "example_plugin"
 version = "0.1.0"
 dependencies = [
  "coprocessor_plugin_api",
+ "futures 0.3.15",
 ]
 
 [[package]]
@@ -1650,7 +1651,7 @@ dependencies = [
  "matches",
  "openssl",
  "prometheus",
- "protobuf",
+ "protobuf 2.8.0",
  "rand 0.8.3",
  "rusoto_core",
  "rust-ini",
@@ -1691,7 +1692,7 @@ dependencies = [
  "matches",
  "nix 0.23.0",
  "once_cell",
- "protobuf",
+ "protobuf 2.8.0",
  "rust-ini",
  "signal",
  "slog",
@@ -2176,6 +2177,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "graph_meta_plugin"
+version = "0.1.4"
+dependencies = [
+ "coprocessor_plugin_api",
+ "futures 0.3.15",
+ "lazy_static",
+ "log",
+ "protobuf 3.1.0",
+]
+
+[[package]]
 name = "grpcio"
 version = "0.10.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2187,7 +2199,7 @@ dependencies = [
  "libc 0.2.125",
  "log",
  "parking_lot 0.11.1",
- "protobuf",
+ "protobuf 2.8.0",
 ]
 
 [[package]]
@@ -2196,7 +2208,7 @@ version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4caa0700833147dcfbe4f0758bd92545cc0f4506ee7fa154e499745a8b24e86c"
 dependencies = [
- "protobuf",
+ "protobuf 2.8.0",
 ]
 
 [[package]]
@@ -2209,7 +2221,7 @@ dependencies = [
  "futures-util",
  "grpcio",
  "log",
- "protobuf",
+ "protobuf 2.8.0",
 ]
 
 [[package]]
@@ -2541,15 +2553,6 @@ dependencies = [
 
 [[package]]
 name = "itertools"
-version = "0.9.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "284f18f85651fe11e8a991b2adb42cb078325c996ed026d994719efcfca1d54b"
-dependencies = [
- "either",
-]
-
-[[package]]
-name = "itertools"
 version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "37d572918e350e82412fe766d24b15e6682fb2ed2bbe018280caa810397cb319"
@@ -2615,11 +2618,11 @@ dependencies = [
 [[package]]
 name = "kvproto"
 version = "0.0.2"
-source = "git+https://github.com/pingcap/kvproto.git#0e2f26c0a46ae7d666d6ca4410046a39e0c96f36"
+source = "git+https://github.com/paynie/kvproto?branch=release-6.1#c4e6513556ff9268027037a5d3d141b7cda3cc11"
 dependencies = [
  "futures 0.3.15",
  "grpcio",
- "protobuf",
+ "protobuf 2.8.0",
  "protobuf-build",
  "raft-proto",
 ]
@@ -2744,7 +2747,6 @@ dependencies = [
 [[package]]
 name = "librocksdb_sys"
 version = "0.1.0"
-source = "git+https://github.com/tikv/rust-rocksdb.git#de8310c3983a30236ea03f802ed0c2401a4908ae"
 dependencies = [
  "bindgen 0.57.0",
  "bzip2-sys",
@@ -2763,7 +2765,6 @@ dependencies = [
 [[package]]
 name = "libtitan_sys"
 version = "0.0.1"
-source = "git+https://github.com/tikv/rust-rocksdb.git#de8310c3983a30236ea03f802ed0c2401a4908ae"
 dependencies = [
  "bzip2-sys",
  "cc",
@@ -2825,7 +2826,7 @@ name = "log_wrappers"
 version = "0.0.1"
 dependencies = [
  "hex 0.4.2",
- "protobuf",
+ "protobuf 2.8.0",
  "slog",
  "slog-term",
  "tikv_alloc",
@@ -3799,7 +3800,7 @@ dependencies = [
  "nix 0.24.1",
  "once_cell",
  "parking_lot 0.12.0",
- "protobuf",
+ "protobuf 2.8.0",
  "protobuf-codegen-pure",
  "smallvec",
  "symbolic-demangle",
@@ -3905,7 +3906,7 @@ dependencies = [
  "libc 0.2.125",
  "memchr",
  "parking_lot 0.11.1",
- "protobuf",
+ "protobuf 2.8.0",
  "reqwest",
  "thiserror",
 ]
@@ -3940,7 +3941,7 @@ checksum = "355f634b43cdd80724ee7848f95770e7e70eefa6dcf14fea676216573b8fd603"
 dependencies = [
  "bytes",
  "heck 0.3.1",
- "itertools 0.10.0",
+ "itertools",
  "log",
  "multimap",
  "petgraph",
@@ -3957,7 +3958,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "600d2f334aa05acb02a755e217ef1ab6dea4d51b58b7846588b747edec04efba"
 dependencies = [
  "anyhow",
- "itertools 0.10.0",
+ "itertools",
  "proc-macro2",
  "quote",
  "syn",
@@ -3984,6 +3985,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "protobuf"
+version = "3.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4ee4a7d8b91800c8f167a6268d1a1026607368e1adc84e98fe044aeb905302f7"
+dependencies = [
+ "bytes",
+ "once_cell",
+ "protobuf-support",
+ "thiserror",
+]
+
+[[package]]
 name = "protobuf-build"
 version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3991,7 +4004,7 @@ checksum = "4b2be70fa994657539e3c872cc54363c9bf28b0d7a7f774df70e9fd760df3bc4"
 dependencies = [
  "bitflags",
  "grpcio-compiler",
- "protobuf",
+ "protobuf 2.8.0",
  "protobuf-codegen",
  "regex",
 ]
@@ -4002,7 +4015,7 @@ version = "2.8.0"
 source = "git+https://github.com/pingcap/rust-protobuf?branch=v2.8#6642ebaae4352ea01bf00e160480d8da966d3109"
 dependencies = [
  "heck 0.3.1",
- "protobuf",
+ "protobuf 2.8.0",
 ]
 
 [[package]]
@@ -4011,8 +4024,17 @@ version = "2.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "00993dc5fbbfcf9d8a005f6b6c29fd29fd6d86deba3ae3f41fd20c624c414616"
 dependencies = [
- "protobuf",
+ "protobuf 2.8.0",
  "protobuf-codegen",
+]
+
+[[package]]
+name = "protobuf-support"
+version = "3.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8ca157fe12fc7ee2e315f2f735e27df41b3d97cdd70ea112824dac1ffb08ee1c"
+dependencies = [
+ "thiserror",
 ]
 
 [[package]]
@@ -4041,7 +4063,7 @@ dependencies = [
  "bytes",
  "fxhash",
  "getset",
- "protobuf",
+ "protobuf 2.8.0",
  "raft-proto",
  "rand 0.8.3",
  "slog",
@@ -4071,7 +4093,7 @@ dependencies = [
  "parking_lot 0.12.0",
  "prometheus",
  "prometheus-static-metric",
- "protobuf",
+ "protobuf 2.8.0",
  "rayon",
  "rhai",
  "scopeguard",
@@ -4095,7 +4117,7 @@ version = "0.7.0"
 source = "git+https://github.com/tikv/raft-rs?branch=master#2357cb22760719bcd107a90d1e64ef505bdb1e15"
 dependencies = [
  "bytes",
- "protobuf",
+ "protobuf 2.8.0",
  "protobuf-build",
 ]
 
@@ -4110,7 +4132,7 @@ dependencies = [
  "lazy_static",
  "num_cpus",
  "online_config",
- "protobuf",
+ "protobuf 2.8.0",
  "raft",
  "raft-engine",
  "serde",
@@ -4149,7 +4171,7 @@ dependencies = [
  "getset",
  "grpcio-health",
  "into_other",
- "itertools 0.10.0",
+ "itertools",
  "keys",
  "kvproto",
  "lazy_static",
@@ -4164,7 +4186,7 @@ dependencies = [
  "pd_client",
  "prometheus",
  "prometheus-static-metric",
- "protobuf",
+ "protobuf 2.8.0",
  "raft",
  "raft-proto",
  "rand 0.8.3",
@@ -4474,7 +4496,7 @@ dependencies = [
  "panic_hook",
  "pd_client",
  "prometheus",
- "protobuf",
+ "protobuf 2.8.0",
  "raft",
  "raftstore",
  "security",
@@ -4572,7 +4594,6 @@ dependencies = [
 [[package]]
 name = "rocksdb"
 version = "0.3.0"
-source = "git+https://github.com/tikv/rust-rocksdb.git#de8310c3983a30236ea03f802ed0c2401a4908ae"
 dependencies = [
  "libc 0.2.125",
  "librocksdb_sys",
@@ -5024,7 +5045,7 @@ dependencies = [
  "nix 0.23.0",
  "pd_client",
  "prometheus",
- "protobuf",
+ "protobuf 2.8.0",
  "raft",
  "raft_log_engine",
  "raftstore",
@@ -5525,7 +5546,7 @@ dependencies = [
  "futures-util",
  "grpcio",
  "kvproto",
- "protobuf",
+ "protobuf 2.8.0",
  "rand 0.8.3",
  "tempfile",
  "test_raftstore",
@@ -5545,7 +5566,7 @@ dependencies = [
  "engine_rocks",
  "futures 0.3.15",
  "kvproto",
- "protobuf",
+ "protobuf 2.8.0",
  "resource_metering",
  "test_storage",
  "tidb_query_common",
@@ -5597,7 +5618,7 @@ dependencies = [
  "lazy_static",
  "log_wrappers",
  "pd_client",
- "protobuf",
+ "protobuf 2.8.0",
  "raft",
  "raftstore",
  "rand 0.8.3",
@@ -5705,7 +5726,7 @@ dependencies = [
  "perfcnt",
  "procinfo",
  "profiler",
- "protobuf",
+ "protobuf 2.8.0",
  "raft",
  "raft_log_engine",
  "raftstore",
@@ -5865,7 +5886,7 @@ dependencies = [
  "num-derive",
  "num-traits",
  "ordered-float 1.1.1",
- "protobuf",
+ "protobuf 2.8.0",
  "regex",
  "serde",
  "serde_json",
@@ -5888,11 +5909,11 @@ dependencies = [
  "collections",
  "fail",
  "futures 0.3.15",
- "itertools 0.10.0",
+ "itertools",
  "kvproto",
  "log_wrappers",
  "match_template",
- "protobuf",
+ "protobuf 2.8.0",
  "slog",
  "slog-global",
  "smallvec",
@@ -5926,7 +5947,7 @@ dependencies = [
  "openssl",
  "panic_hook",
  "profiler",
- "protobuf",
+ "protobuf 2.8.0",
  "rand 0.8.3",
  "regex",
  "safemem",
@@ -5987,7 +6008,7 @@ dependencies = [
  "hyper-openssl",
  "hyper-tls",
  "into_other",
- "itertools 0.10.0",
+ "itertools",
  "keys",
  "kvproto",
  "lazy_static",
@@ -6016,7 +6037,7 @@ dependencies = [
  "procinfo",
  "prometheus",
  "prometheus-static-metric",
- "protobuf",
+ "protobuf 2.8.0",
  "raft",
  "raft_log_engine",
  "raftstore",
@@ -6092,7 +6113,7 @@ dependencies = [
  "nix 0.23.0",
  "pd_client",
  "prometheus",
- "protobuf",
+ "protobuf 2.8.0",
  "raft",
  "raft-engine-ctl",
  "raft_log_engine",
@@ -6118,9 +6139,9 @@ dependencies = [
 
 [[package]]
 name = "tikv-jemalloc-ctl"
-version = "0.4.2"
+version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "eb833c46ecbf8b6daeccb347cefcabf9c1beb5c9b0f853e1cec45632d9963e69"
+checksum = "e37706572f4b151dff7a0146e040804e9c26fe3a3118591112f05cf12a4216c1"
 dependencies = [
  "libc 0.2.125",
  "paste",
@@ -6129,9 +6150,9 @@ dependencies = [
 
 [[package]]
 name = "tikv-jemalloc-sys"
-version = "0.4.3+5.2.1-patched.2"
+version = "0.5.1+5.3.0-patched"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a1792ccb507d955b46af42c123ea8863668fae24d03721e40cad6a41773dbb49"
+checksum = "931e876f91fed0827f863a2d153897790da0b24d882c721a79cb3beb0b903261"
 dependencies = [
  "cc",
  "fs_extra",
@@ -6140,9 +6161,9 @@ dependencies = [
 
 [[package]]
 name = "tikv-jemallocator"
-version = "0.4.3"
+version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a5b7bcecfafe4998587d636f9ae9d55eb9d0499877b88757767c346875067098"
+checksum = "20612db8a13a6c06d57ec83953694185a367e16945f66565e8028d2c0bd76979"
 dependencies = [
  "libc 0.2.125",
  "tikv-jemalloc-sys",
@@ -6244,7 +6265,7 @@ dependencies = [
  "procinfo",
  "prometheus",
  "prometheus-static-metric",
- "protobuf",
+ "protobuf 2.8.0",
  "rand 0.8.3",
  "regex",
  "rusoto_core",
@@ -6297,7 +6318,7 @@ source = "git+https://github.com/pingcap/tipb.git#f3286471a05a4454a1071dd5f66ac7
 dependencies = [
  "futures 0.3.15",
  "grpcio",
- "protobuf",
+ "protobuf 2.8.0",
  "protobuf-build",
 ]
 
@@ -7028,12 +7049,10 @@ dependencies = [
 
 [[package]]
 name = "zstd-sys"
-version = "1.4.19+zstd.1.4.8"
+version = "2.0.1+zstd.1.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ec24a9273d24437afb8e71b16f3d9a5d569193cccdb7896213b59f552f387674"
+checksum = "9fd07cbbc53846d9145dbffdf6dd09a7a0aa52be46741825f5c97bdd4f73f12b"
 dependencies = [
  "cc",
- "glob",
- "itertools 0.9.0",
  "libc 0.2.125",
 ]
