@@ -62,6 +62,7 @@ use crate::server::Config as ServerConfig;
 use crate::server::CONFIG_ROCKSDB_GAUGE;
 use crate::storage::config::{Config as StorageConfig, DEFAULT_DATA_DIR};
 
+
 pub const DEFAULT_ROCKSDB_SUB_DIR: &str = "db";
 
 /// By default, block cache size will be set to 45% of system memory.
@@ -231,6 +232,14 @@ macro_rules! cf_config {
         #[serde(rename_all = "kebab-case")]
         pub struct $name {
             #[online_config(skip)]
+            pub index_type: i32,
+            #[online_config(skip)]
+            pub partition_filters: bool,
+            #[online_config(skip)]
+            pub metadata_block_size: ReadableSize,
+            #[online_config(skip)]
+            pub cache_index_and_filter_blocks_with_high_priority: bool,
+            #[online_config(skip)]
             pub block_size: ReadableSize,
             pub block_cache_size: ReadableSize,
             #[online_config(skip)]
@@ -323,6 +332,18 @@ macro_rules! cf_config {
 
 macro_rules! write_into_metrics {
     ($cf:expr, $tag:expr, $metrics:expr) => {{
+        $metrics
+            .with_label_values(&[$tag, "index_type"])
+            .set(($cf.index_type as i32).into());
+        $metrics
+            .with_label_values(&[$tag, "partition_filters"])
+            .set(($cf.partition_filters as i32).into());
+        $metrics
+            .with_label_values(&[$tag, "metadata_block_size"])
+            .set($cf.metadata_block_size.0 as f64);
+        $metrics
+            .with_label_values(&[$tag, "cache_index_and_filter_blocks_with_high_priority"])
+            .set(($cf.cache_index_and_filter_blocks_with_high_priority as i32).into());
         $metrics
             .with_label_values(&[$tag, "block_size"])
             .set($cf.block_size.0 as f64);
@@ -441,6 +462,12 @@ macro_rules! write_into_metrics {
 macro_rules! build_cf_opt {
     ($opt:ident, $cf_name:ident, $cache:ident, $region_info_provider:ident) => {{
         let mut block_base_opts = BlockBasedOptions::new();
+        // Set partition/index type
+        //block_base_opts.set_index_type($opt.index_type);
+        block_base_opts.set_partition_filters($opt.partition_filters);
+        block_base_opts.set_metadata_block_size($opt.metadata_block_size.0 as usize);
+        block_base_opts.set_cache_index_and_filter_blocks_with_high_priority($opt.cache_index_and_filter_blocks_with_high_priority);
+
         block_base_opts.set_block_size($opt.block_size.0 as usize);
         block_base_opts.set_no_block_cache($opt.disable_block_cache);
         if let Some(cache) = $cache {
@@ -524,6 +551,11 @@ impl Default for DefaultCfConfig {
         let total_mem = SysQuota::memory_limit_in_bytes();
 
         DefaultCfConfig {
+            index_type: 2,
+            partition_filters: false,
+            metadata_block_size: ReadableSize::kb(4),
+            cache_index_and_filter_blocks_with_high_priority: true,
+
             block_size: ReadableSize::kb(64),
             block_cache_size: memory_limit_for_cf(false, CF_DEFAULT, total_mem),
             disable_block_cache: false,
@@ -620,6 +652,11 @@ impl Default for WriteCfConfig {
         };
 
         WriteCfConfig {
+            index_type: 0,
+            partition_filters: false,
+            metadata_block_size: ReadableSize::kb(4),
+            cache_index_and_filter_blocks_with_high_priority: true,
+
             block_size: ReadableSize::kb(64),
             block_cache_size: memory_limit_for_cf(false, CF_WRITE, total_mem),
             disable_block_cache: false,
@@ -719,6 +756,11 @@ impl Default for LockCfConfig {
         };
 
         LockCfConfig {
+            index_type: 0,
+            partition_filters: false,
+            metadata_block_size: ReadableSize::kb(4),
+            cache_index_and_filter_blocks_with_high_priority: true,
+
             block_size: ReadableSize::kb(16),
             block_cache_size: memory_limit_for_cf(false, CF_LOCK, total_mem),
             disable_block_cache: false,
@@ -793,6 +835,11 @@ impl Default for RaftCfConfig {
             ..Default::default()
         };
         RaftCfConfig {
+            index_type: 0,
+            partition_filters: false,
+            metadata_block_size: ReadableSize::kb(4),
+            cache_index_and_filter_blocks_with_high_priority: true,
+
             block_size: ReadableSize::kb(16),
             block_cache_size: ReadableSize::mb(128),
             disable_block_cache: false,
@@ -1131,6 +1178,11 @@ impl Default for RaftDefaultCfConfig {
         let total_mem = SysQuota::memory_limit_in_bytes();
 
         RaftDefaultCfConfig {
+            index_type: 0,
+            partition_filters: false,
+            metadata_block_size: ReadableSize::kb(4),
+            cache_index_and_filter_blocks_with_high_priority: true,
+
             block_size: ReadableSize::kb(64),
             block_cache_size: memory_limit_for_cf(true, CF_DEFAULT, total_mem),
             disable_block_cache: false,
@@ -2473,6 +2525,29 @@ impl Default for TiKvConfig {
 }
 
 impl TiKvConfig {
+    pub fn infer_raft_db_path(&self, data_dir: Option<&str>) -> Result<String, Box<dyn Error>> {
+        if self.raft_store.raftdb_path.is_empty() {
+            let data_dir = data_dir.unwrap_or(&self.storage.data_dir);
+            config::canonicalize_sub_path(data_dir, "raft")
+        } else {
+            config::canonicalize_path(&self.raft_store.raftdb_path)
+        }
+    }
+
+    pub fn infer_raft_engine_path(&self, data_dir: Option<&str>) -> Result<String, Box<dyn Error>> {
+        if self.raft_engine.config.dir.is_empty() {
+            let data_dir = data_dir.unwrap_or(&self.storage.data_dir);
+            config::canonicalize_sub_path(data_dir, "raft-engine")
+        } else {
+            config::canonicalize_path(&self.raft_engine.config.dir)
+        }
+    }
+
+    pub fn infer_kv_engine_path(&self, data_dir: Option<&str>) -> Result<String, Box<dyn Error>> {
+        let data_dir = data_dir.unwrap_or(&self.storage.data_dir);
+        config::canonicalize_sub_path(data_dir, DEFAULT_ROCKSDB_SUB_DIR)
+    }
+
     // TODO: change to validate(&self)
     pub fn validate(&mut self) -> Result<(), Box<dyn Error>> {
         self.readpool.validate()?;
@@ -2486,26 +2561,14 @@ impl TiKvConfig {
                 .to_owned();
         }
 
-        let default_raftdb_path = config::canonicalize_sub_path(&self.storage.data_dir, "raft")?;
-        if self.raft_store.raftdb_path.is_empty() {
-            self.raft_store.raftdb_path = default_raftdb_path;
-        } else {
-            self.raft_store.raftdb_path = config::canonicalize_path(&self.raft_store.raftdb_path)?;
-        }
+        self.raft_store.raftdb_path = self.infer_raft_db_path(None)?;
+        self.raft_engine.config.dir = self.infer_raft_engine_path(None)?;
 
-        let default_er_path = config::canonicalize_sub_path(&self.storage.data_dir, "raft-engine")?;
-        if self.raft_engine.config.dir.is_empty() {
-            self.raft_engine.config.dir = default_er_path;
-        } else {
-            self.raft_engine.config.dir = config::canonicalize_path(&self.raft_engine.config.dir)?;
-        }
         if self.raft_engine.config.dir == self.raft_store.raftdb_path {
             return Err("raft_engine.config.dir can't be same as raft_store.raftdb_path".into());
         }
 
-        let kv_db_path =
-            config::canonicalize_sub_path(&self.storage.data_dir, DEFAULT_ROCKSDB_SUB_DIR)?;
-
+        let kv_db_path = self.infer_kv_engine_path(None)?;
         if kv_db_path == self.raft_store.raftdb_path {
             return Err("raft_store.raftdb_path can't be same as storage.data_dir/db".into());
         }
@@ -2598,10 +2661,51 @@ impl TiKvConfig {
             self.raftdb.defaultcf.soft_pending_compaction_bytes_limit = ReadableSize(0);
             self.raftdb.defaultcf.hard_pending_compaction_bytes_limit = ReadableSize(0);
 
+            // disable kvdb write stall, and override related configs
             self.rocksdb.defaultcf.disable_write_stall = true;
+            self.rocksdb.defaultcf.level0_slowdown_writes_trigger =
+                self.storage.flow_control.l0_files_threshold as i32;
+            self.rocksdb.defaultcf.soft_pending_compaction_bytes_limit = self
+                .storage
+                .flow_control
+                .soft_pending_compaction_bytes_limit;
+            self.rocksdb.defaultcf.hard_pending_compaction_bytes_limit = self
+                .storage
+                .flow_control
+                .hard_pending_compaction_bytes_limit;
             self.rocksdb.writecf.disable_write_stall = true;
+            self.rocksdb.writecf.level0_slowdown_writes_trigger =
+                self.storage.flow_control.l0_files_threshold as i32;
+            self.rocksdb.writecf.soft_pending_compaction_bytes_limit = self
+                .storage
+                .flow_control
+                .soft_pending_compaction_bytes_limit;
+            self.rocksdb.writecf.hard_pending_compaction_bytes_limit = self
+                .storage
+                .flow_control
+                .hard_pending_compaction_bytes_limit;
             self.rocksdb.lockcf.disable_write_stall = true;
+            self.rocksdb.lockcf.level0_slowdown_writes_trigger =
+                self.storage.flow_control.l0_files_threshold as i32;
+            self.rocksdb.lockcf.soft_pending_compaction_bytes_limit = self
+                .storage
+                .flow_control
+                .soft_pending_compaction_bytes_limit;
+            self.rocksdb.lockcf.hard_pending_compaction_bytes_limit = self
+                .storage
+                .flow_control
+                .hard_pending_compaction_bytes_limit;
             self.rocksdb.raftcf.disable_write_stall = true;
+            self.rocksdb.raftcf.level0_slowdown_writes_trigger =
+                self.storage.flow_control.l0_files_threshold as i32;
+            self.rocksdb.raftcf.soft_pending_compaction_bytes_limit = self
+                .storage
+                .flow_control
+                .soft_pending_compaction_bytes_limit;
+            self.rocksdb.raftcf.hard_pending_compaction_bytes_limit = self
+                .storage
+                .flow_control
+                .hard_pending_compaction_bytes_limit;
         }
 
         if let Some(memory_usage_limit) = self.memory_usage_limit.0 {
@@ -3575,10 +3679,24 @@ mod tests {
     }
 
     #[test]
-    fn test_change_flow_control() {
+    fn test_flow_control() {
         let (mut cfg, _dir) = TiKvConfig::with_tmp().unwrap();
+        cfg.storage.flow_control.l0_files_threshold = 50;
         cfg.validate().unwrap();
         let (db, cfg_controller, _, flow_controller) = new_engines(cfg);
+
+        assert_eq!(
+            db.get_options_cf(CF_DEFAULT)
+                .unwrap()
+                .get_level_zero_slowdown_writes_trigger(),
+            50
+        );
+        assert_eq!(
+            db.get_options_cf(CF_DEFAULT)
+                .unwrap()
+                .get_level_zero_stop_writes_trigger(),
+            50
+        );
 
         assert_eq!(
             db.get_options_cf(CF_DEFAULT)

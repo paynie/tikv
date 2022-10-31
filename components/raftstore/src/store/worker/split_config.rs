@@ -9,8 +9,8 @@ use tikv_util::info;
 const DEFAULT_DETECT_TIMES: u64 = 10;
 const DEFAULT_SAMPLE_THRESHOLD: u64 = 100;
 pub(crate) const DEFAULT_SAMPLE_NUM: usize = 20;
-const DEFAULT_QPS_THRESHOLD: usize = 3000;
-const DEFAULT_BYTE_THRESHOLD: usize = 30 * 1024 * 1024;
+const DEFAULT_QPS_THRESHOLD: usize = 300000000000;
+const DEFAULT_BYTE_THRESHOLD: usize = 30 * 1024 * 1024 * 1024 * 1024;
 
 // We get balance score by abs(sample.left-sample.right)/(sample.right+sample.left). It will be used to measure left and right balance
 const DEFAULT_SPLIT_BALANCE_SCORE: f64 = 0.25;

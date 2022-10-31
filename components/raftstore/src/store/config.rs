@@ -88,6 +88,8 @@ pub struct Config {
     #[online_config(skip)]
     pub raft_reject_transfer_leader_duration: ReadableDuration,
 
+    // Enable region split option
+    pub region_split_enable: bool,
     // Interval (ms) to check region whether need to be split or not.
     pub split_region_check_tick_interval: ReadableDuration,
     /// When size change of region exceed the diff since last check, it
@@ -266,6 +268,7 @@ impl Default for Config {
             raft_engine_purge_interval: ReadableDuration::secs(10),
             raft_entry_cache_life_time: ReadableDuration::secs(30),
             raft_reject_transfer_leader_duration: ReadableDuration::secs(3),
+            region_split_enable: true,
             split_region_check_tick_interval: ReadableDuration::secs(10),
             region_split_check_diff: split_size / 16,
             region_compact_check_interval: ReadableDuration::minutes(5),
@@ -577,6 +580,10 @@ impl Config {
         CONFIG_RAFTSTORE_GAUGE
             .with_label_values(&["raft_entry_cache_life_time"])
             .set(self.raft_entry_cache_life_time.as_secs_f64());
+
+        CONFIG_RAFTSTORE_GAUGE
+            .with_label_values(&["region_split_enable"])
+            .set((self.region_split_enable as i32).into());
 
         CONFIG_RAFTSTORE_GAUGE
             .with_label_values(&["split_region_check_tick_interval"])
