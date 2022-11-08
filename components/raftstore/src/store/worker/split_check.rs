@@ -134,11 +134,25 @@ pub enum Task {
     ChangeConfig(ConfigChange),
     #[cfg(any(test, feature = "testexport"))]
     Validate(Box<dyn FnOnce(&Config) + Send>),
+
+    RegionSizeTask {
+        region: Region,
+        auto_split: bool,
+        policy: CheckPolicy,
+    }
 }
 
 impl Task {
     pub fn split_check(region: Region, auto_split: bool, policy: CheckPolicy) -> Task {
         Task::SplitCheckTask {
+            region,
+            auto_split,
+            policy,
+        }
+    }
+
+    pub fn cal_region_size(region: Region, auto_split: bool, policy: CheckPolicy) -> Task {
+        Task::RegionSizeTask {
             region,
             auto_split,
             policy,
@@ -160,6 +174,15 @@ impl Display for Task {
             Task::ChangeConfig(_) => write!(f, "[split check worker] Change Config Task"),
             #[cfg(any(test, feature = "testexport"))]
             Task::Validate(_) => write!(f, "[split check worker] Validate config"),
+
+            Task::RegionSizeTask {
+                region, auto_split, ..
+            } => write!(
+                f,
+                "[calculate region size] Calculate region size Task for {}, auto_split: {:?}",
+                region.get_id(),
+                auto_split
+            ),
         }
     }
 }
@@ -258,6 +281,67 @@ where
         }
     }
 
+    /// Checks a Region with split checkers to produce split keys and generates split admin command.
+    fn cal_region_size(&mut self, region: &Region, auto_split: bool, policy: CheckPolicy) {
+        let region_id = region.get_id();
+        let start_key = keys::enc_start_key(region);
+        let end_key = keys::enc_end_key(region);
+        info!(
+            "executing task";
+            "region_id" => region_id,
+            "start_key" => log_wrappers::Value::key(&start_key),
+            "end_key" => log_wrappers::Value::key(&end_key),
+        );
+        CHECK_SPILT_COUNTER.all.inc();
+
+        let mut host =
+            self.coprocessor
+                .new_split_checker_host(region, &self.engine, auto_split, policy);
+        if host.skip() {
+            debug!("skip split check"; "region_id" => region.get_id());
+            return;
+        }
+
+        let split_keys = match host.policy() {
+            CheckPolicy::Scan => {
+                match self.scan_split_keys(&mut host, region, &start_key, &end_key) {
+                    Ok(keys) => keys,
+                    Err(e) => {
+                        error!(%e; "failed to scan split key"; "region_id" => region_id,);
+                        return;
+                    }
+                }
+            }
+            CheckPolicy::Approximate => match host.approximate_split_keys(region, &self.engine) {
+                Ok(keys) => keys
+                    .into_iter()
+                    .map(|k| keys::origin_key(&k).to_vec())
+                    .collect(),
+                Err(e) => {
+                    error!(%e;
+                        "failed to get approximate split key, try scan way";
+                        "region_id" => region_id,
+                    );
+                    match self.scan_split_keys(&mut host, region, &start_key, &end_key) {
+                        Ok(keys) => keys,
+                        Err(e) => {
+                            error!(%e; "failed to scan split key"; "region_id" => region_id,);
+                            return;
+                        }
+                    }
+                }
+            },
+            CheckPolicy::Usekey => vec![], // Handled by pd worker directly.
+        };
+
+        if !split_keys.is_empty() {
+            CHECK_SPILT_COUNTER.success.inc();
+        } else {
+            CHECK_SPILT_COUNTER.ignore.inc();
+        }
+        
+    }
+
     /// Gets the split keys by scanning the range.
     fn scan_split_keys(
         &self,
@@ -332,6 +416,12 @@ where
             Task::ChangeConfig(c) => self.change_cfg(c),
             #[cfg(any(test, feature = "testexport"))]
             Task::Validate(f) => f(&self.coprocessor.cfg),
+
+            Task::RegionSizeTask {
+                region,
+                auto_split,
+                policy,
+            } => self.cal_region_size(&region, auto_split, policy),
         }
     }
 }

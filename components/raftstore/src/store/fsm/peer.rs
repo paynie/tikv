@@ -4041,10 +4041,10 @@ where
         info!("on_split_region_check_tick");
 
         // If region split not enable, just return
-        if !self.ctx.cfg.region_split_enable {
-            info!("region split disable, just return");
-            return;
-        }
+        //if !self.ctx.cfg.region_split_enable {
+        //    info!("region split disable, just return");
+        //    return;
+        //}
 
         if !self.fsm.peer.is_leader() {
             return;
@@ -4094,7 +4094,13 @@ where
             return;
         }
         self.fsm.skip_split_count = 0;
-        let task = SplitCheckTask::split_check(self.region().clone(), true, CheckPolicy::Scan);
+        let task: Task = if self.ctx.cfg.region_split_enable {
+            SplitCheckTask::split_check(self.region().clone(), true, CheckPolicy::Scan)
+        } else {
+            SplitCheckTask::cal_region_size(self.region().clone(), true, CheckPolicy::Scan)
+        };
+
+        //let task = SplitCheckTask::split_check(self.region().clone(), true, CheckPolicy::Scan);
         if let Err(e) = self.ctx.split_check_scheduler.schedule(task) {
             error!(
                 "failed to schedule split check";
