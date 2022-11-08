@@ -4094,7 +4094,7 @@ where
             return;
         }
         self.fsm.skip_split_count = 0;
-        let task: Task = if self.ctx.cfg.region_split_enable {
+        let task = if self.ctx.cfg.region_split_enable {
             SplitCheckTask::split_check(self.region().clone(), true, CheckPolicy::Scan)
         } else {
             SplitCheckTask::cal_region_size(self.region().clone(), true, CheckPolicy::Scan)
