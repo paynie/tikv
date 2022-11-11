@@ -4051,12 +4051,12 @@ where
         }
 
 
-        info!("before check split condition"; 
-            "region_id" => self.fsm.region_id(),
-            "has_calculated_region_size" => self.fsm.peer.has_calculated_region_size,
-            "self.fsm.peer.compaction_declined_bytes" => self.fsm.peer.compaction_declined_bytes,
-            "self.fsm.peer.size_diff_hint" => self.fsm.peer.size_diff_hint,
-            "self.ctx.cfg.region_split_check_diff.0" => self.ctx.cfg.region_split_check_diff.0,);
+        //info!("before check split condition"; 
+        //    "region_id" => self.fsm.region_id(),
+        //    "has_calculated_region_size" => self.fsm.peer.has_calculated_region_size,
+        //    "self.fsm.peer.compaction_declined_bytes" => self.fsm.peer.compaction_declined_bytes,
+        //    "self.fsm.peer.size_diff_hint" => self.fsm.peer.size_diff_hint,
+        //    "self.ctx.cfg.region_split_check_diff.0" => self.ctx.cfg.region_split_check_diff.0,);
     
 
         // When restart, the has_calculated_region_size will be false. The split check will first
@@ -4104,7 +4104,7 @@ where
         }
         self.fsm.skip_split_count = 0;
 
-        info!("before cal_region_size"; "region_id" => self.fsm.region_id());
+        //info!("before cal_region_size"; "region_id" => self.fsm.region_id());
         let task = if self.ctx.cfg.region_split_enable {
             SplitCheckTask::split_check(self.region().clone(), true, CheckPolicy::Scan)
         } else {          
@@ -4122,7 +4122,7 @@ where
             return;
         }
 
-        info!("after cal_region_size"; "region_id" => self.fsm.region_id());
+        //info!("after cal_region_size"; "region_id" => self.fsm.region_id());
         self.fsm.peer.size_diff_hint = 0;
         self.fsm.peer.compaction_declined_bytes = 0;
     }
@@ -4236,12 +4236,12 @@ where
     }
 
     fn on_approximate_region_size(&mut self, size: u64) {
-        info!(
-            "on_approximate_region_size";
-            "region_id" => self.fsm.region_id(),
-            "peer_id" => self.fsm.peer_id(),
-            "approximate_region_size" => size,
-        );
+        //info!(
+        //    "on_approximate_region_size";
+        //    "region_id" => self.fsm.region_id(),
+        //    "peer_id" => self.fsm.peer_id(),
+        //    "approximate_region_size" => size,
+        //);
 
         self.fsm.peer.approximate_size = Some(size);
         self.fsm.peer.has_calculated_region_size = true;
@@ -4251,12 +4251,12 @@ where
     }
 
     fn on_approximate_region_keys(&mut self, keys: u64) {
-        info!(
-            "on_approximate_region_keys";
-            "region_id" => self.fsm.region_id(),
-            "peer_id" => self.fsm.peer_id(),
-            "approximate_region_keys" => keys,
-        );
+        //info!(
+        //    "on_approximate_region_keys";
+        //    "region_id" => self.fsm.region_id(),
+        //    "peer_id" => self.fsm.peer_id(),
+        //    "approximate_region_keys" => keys,
+        //);
 
         self.fsm.peer.approximate_keys = Some(keys);
         self.register_split_region_check_tick();
