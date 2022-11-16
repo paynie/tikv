@@ -53,19 +53,20 @@ impl<S: Snapshot, L: LockManager> WriteCommand<S, L> for RawSetKeyTTL {
         let (cf, key, ttl, ctx, enable_write_with_version) = (self.cf, self.key, self.ttl, self.ctx, self.enable_write_with_version);
         let mut data = vec![];
 
+        let store = RawStore::new(snapshot, self.api_version);
         if enable_write_with_version {
             // Generate version key
-            let version_key = key.get_version_key();
+            let version_key = key.get_version_key();    
 
             // Get old version
-            let old_version_value = RawStore::new(snapshot, self.api_version).raw_get_key_value(
+            let old_version_value = store.raw_get_key_value(
                 cf,
                 &version_key,
                 &mut Statistics::default(),
             )?;
 
             // Get old value, already remove ttl
-            let old_value = RawStore::new(snapshot, self.api_version).raw_get_key_value(
+            let old_value = store.raw_get_key_value(
                 cf,
                 &key,
                 &mut Statistics::default(),
@@ -164,7 +165,7 @@ impl<S: Snapshot, L: LockManager> WriteCommand<S, L> for RawSetKeyTTL {
             }
         } else {
             // Get old value, already remove ttl
-            let old_value = RawStore::new(snapshot, self.api_version).raw_get_key_value(
+            let old_value = store.raw_get_key_value(
                 cf,
                 &key,
                 &mut Statistics::default(),
