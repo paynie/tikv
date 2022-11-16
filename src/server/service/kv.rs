@@ -1614,6 +1614,7 @@ fn future_raw_set_key_ttl<E: Engine, L: LockManager, F: KvFormat>(
         req.take_key(),
         req.get_ttl(),
         cb,
+        true,
     );
 
     async move {

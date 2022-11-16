@@ -33,6 +33,7 @@ command! {
             key: Key,
             ttl: u64,
             api_version: ApiVersion,
+            enable_write_with_version: bool，
         }
 }
 
@@ -49,48 +50,160 @@ impl CommandExt for RawSetKeyTTL {
 
 impl<S: Snapshot, L: LockManager> WriteCommand<S, L> for RawSetKeyTTL {
     fn process_write(self, snapshot: S, _: WriteContext<'_, L>) -> Result<WriteResult> {
-        let (cf, key, ttl, ctx) = (self.cf, self.key, self.ttl, self.ctx);
+        let (cf, key, ttl, ctx, enable_write_with_version) = (self.cf, self.key, self.ttl, self.ctx, self.enable_write_with_version);
         let mut data = vec![];
 
-        // Get old value, already remove ttl
-        let old_value = RawStore::new(snapshot, self.api_version).raw_get_key_value(
-            cf,
-            &key,
-            &mut Statistics::default(),
-        )?;
+        if enable_write_with_version {
+            // Generate version key
+            let version_key = key.get_version_key();
 
-        match old_value {
-            Some(v) => {
-                // Value exist, append ttl at the end of value
+            // Get old version
+            let old_version_value = RawStore::new(snapshot, self.api_version).raw_get_key_value(
+                cf,
+                &version_key,
+                &mut Statistics::default(),
+            )?;
 
-                // Generate new value
-                let raw_value = RawValue {
-                    user_value: v,
-                    expire_ts: ttl_to_expire_ts(ttl),
-                    is_delete: false,
-                };
+            // Get old value, already remove ttl
+            let old_value = RawStore::new(snapshot, self.api_version).raw_get_key_value(
+                cf,
+                &key,
+                &mut Statistics::default(),
+            )?;
 
-                let encoded_raw_value = match_template_api_version!(
-                    API,
-                    match self.api_version {
-                        ApiVersion::API => API::encode_raw_value_owned(raw_value),
+            match old_value {
+                Some(v) => {
+                    // Generate new value
+                    let raw_value = RawValue {
+                        user_value: v,
+                        expire_ts: ttl_to_expire_ts(ttl),
+                        is_delete: false,
+                    };
+
+                    let encoded_raw_value = match_template_api_version!(
+                        API,
+                        match self.api_version {
+                            ApiVersion::API => API::encode_raw_value_owned(raw_value),
+                        }
+                    );
+
+                    // Generate Modify
+                    let value_modify = Modify::Put(
+                        cf,
+                        key,
+                        encoded_raw_value,
+                    );
+
+                    data.push(value_modify);
+
+                    match old_version_value {
+                        Some(version_value) => {
+                            // Generate new verison value
+                            let raw_version_value = RawValue {
+                                user_value: version_value,
+                                expire_ts: ttl_to_expire_ts(ttl),
+                                is_delete: false,
+                            };
+
+                            let encoded_raw_version_value = match_template_api_version!(
+                                API,
+                                match self.api_version {
+                                    ApiVersion::API => API::encode_raw_value_owned(raw_version_value),
+                                }
+                            );
+
+                            // Generate Modify
+                            let version_modify = Modify::Put(
+                                cf,
+                                version_key,
+                                encoded_raw_version_value,
+                            );
+
+                            data.push(version_modify);
+                        }
+
+                        None => {
+                            // Ingore
+                        }
                     }
-                );
+                    // Value exist, append ttl at the end of value
+                }
 
-                // Generate Modify
-                let m = Modify::Put(
-                    cf,
-                    key,
-                    encoded_raw_value,
-                );
+                None => {                              
+                    match old_version {
+                        Some(value) => {
+                            // Generate new verison value
+                            let raw_version_value = RawValue {
+                                user_value: version_value,
+                                expire_ts: ttl_to_expire_ts(ttl),
+                                is_delete: false,
+                            };
 
-                data.push(m);
+                            let encoded_raw_version_value = match_template_api_version!(
+                                API,
+                                match self.api_version {
+                                    ApiVersion::API => API::encode_raw_value_owned(raw_version_value),
+                                }
+                            );
+
+                            // Generate Modify
+                            let version_modify = Modify::Put(
+                                cf,
+                                version_key,
+                                encoded_raw_version_value,
+                            );
+
+                            data.push(version_modify);
+                        }
+
+                        None => {
+                            // Ignore
+                        }
+                    }
+                }
             }
+        } else {
+            // Get old value, already remove ttl
+            let old_value = RawStore::new(snapshot, self.api_version).raw_get_key_value(
+                cf,
+                &key,
+                &mut Statistics::default(),
+            )?;
 
-            None => {
-                // Value not exist, just return
+            match old_value {
+                Some(v) => {
+                    // Value exist, append ttl at the end of value
+
+                    // Generate new value
+                    let raw_value = RawValue {
+                        user_value: v,
+                        expire_ts: ttl_to_expire_ts(ttl),
+                        is_delete: false,
+                    };
+
+                    let encoded_raw_value = match_template_api_version!(
+                        API,
+                        match self.api_version {
+                            ApiVersion::API => API::encode_raw_value_owned(raw_value),
+                        }
+                    );
+
+                    // Generate Modify
+                    let m = Modify::Put(
+                        cf,
+                        key,
+                        encoded_raw_value,
+                    );
+
+                    data.push(m);
+                }
+
+                None => {
+                    // Value not exist, just return
+                }
             }
         }
+
 
         fail_point!("txn_commands_set_key_ttl");
         let rows = data.len();

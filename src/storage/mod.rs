@@ -2452,6 +2452,7 @@ impl<E: Engine, L: LockManager, F: KvFormat> Storage<E, L, F> {
         key: Vec<u8>,
         ttl: u64,
         callback: Callback<()>,
+        enable_write_with_version: bool,
     ) -> Result<()> {
         let keys = vec![&key];
         Self::check_api_version(
@@ -2462,7 +2463,7 @@ impl<E: Engine, L: LockManager, F: KvFormat> Storage<E, L, F> {
         )?;
 
         let cf = Self::rawkv_cf(&cf, self.api_version)?;
-        let cmd = RawSetKeyTTL::new(cf, Key::from_encoded(key), ttl, self.api_version, ctx);
+        let cmd = RawSetKeyTTL::new(cf, Key::from_encoded(key), ttl, self.api_version, ctx, enable_write_with_version);
         self.sched_txn_command(cmd, callback)
     }
 
