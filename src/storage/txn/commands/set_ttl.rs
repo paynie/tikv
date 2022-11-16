@@ -33,7 +33,7 @@ command! {
             key: Key,
             ttl: u64,
             api_version: ApiVersion,
-            enable_write_with_version: bool，
+            enable_write_with_version: bool,
         }
 }
 
@@ -130,8 +130,8 @@ impl<S: Snapshot, L: LockManager> WriteCommand<S, L> for RawSetKeyTTL {
                 }
 
                 None => {                              
-                    match old_version {
-                        Some(value) => {
+                    match old_version_value {
+                        Some(version_value) => {
                             // Generate new verison value
                             let raw_version_value = RawValue {
                                 user_value: version_value,

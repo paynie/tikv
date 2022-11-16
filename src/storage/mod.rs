@@ -2463,7 +2463,7 @@ impl<E: Engine, L: LockManager, F: KvFormat> Storage<E, L, F> {
         )?;
 
         let cf = Self::rawkv_cf(&cf, self.api_version)?;
-        let cmd = RawSetKeyTTL::new(cf, Key::from_encoded(key), ttl, self.api_version, ctx, enable_write_with_version);
+        let cmd = RawSetKeyTTL::new(cf, Key::from_encoded(key), ttl, self.api_version, enable_write_with_version, ctx);
         self.sched_txn_command(cmd, callback)
     }
 
