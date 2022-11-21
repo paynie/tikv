@@ -957,9 +957,8 @@ where
 
     fn on_gc_snap(&mut self, snaps: Vec<(SnapKey, bool)>) {
         //let is_applying_snap = self.fsm.peer.is_handling_snapshot();
-        let is_applying_snap = self.fsm.peer.is_handling_snapshot() || s.peer_state() == Some(PeerState::Applying);
-
         let s = self.fsm.peer.get_store();
+        let is_applying_snap = self.fsm.peer.is_handling_snapshot() || s.peer_state() == Some(PeerState::Applying);
         let compacted_idx = s.truncated_index();
         let compacted_term = s.truncated_term();
         for (key, is_sending) in snaps {
@@ -2261,7 +2260,7 @@ where
                 "region_id" => job.region_id,
                 "peer_id" => self.fsm.peer_id(),
             );
-            
+
             self.ctx
                 .apply_router
                 .schedule_task(job.region_id, ApplyTask::destroy(job.region_id, false));
