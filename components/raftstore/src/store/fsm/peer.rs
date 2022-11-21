@@ -5100,6 +5100,23 @@ where
             return;
         }
         self.fsm.skip_split_count = 0;
+        
+        let task = if self.ctx.cfg.region_split_enable {
+            SplitCheckTask::split_check(
+                self.region().clone(),
+                true,
+                CheckPolicy::Scan,
+                self.gen_bucket_range_for_update(),
+            )
+        } else {
+            SplitCheckTask::cal_region_size(
+                self.region().clone(),
+                true,
+                CheckPolicy::Scan,
+                self.gen_bucket_range_for_update(),
+            )
+        };
+
         let task = SplitCheckTask::split_check(
             self.region().clone(),
             true,

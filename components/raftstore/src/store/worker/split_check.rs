@@ -149,6 +149,14 @@ pub enum Task {
         policy: CheckPolicy,
         bucket_ranges: Option<Vec<BucketRange>>,
     },
+
+    RegionSizeTask {
+        region: Region,
+        auto_split: bool,
+        policy: CheckPolicy,
+        bucket_ranges: Option<Vec<BucketRange>>,
+    },
+
     ApproximateBuckets(Region),
     ChangeConfig(ConfigChange),
     #[cfg(any(test, feature = "testexport"))]
@@ -169,6 +177,20 @@ impl Task {
             bucket_ranges,
         }
     }
+
+    pub fn cal_region_size(
+        region: Region,
+        auto_split: bool,
+        policy: CheckPolicy,
+        bucket_ranges: Option<Vec<BucketRange>>,
+    ) -> Task {
+        Task::RegionSizeTask {
+            region,
+            auto_split,
+            policy,
+            bucket_ranges,
+        }
+    }
 }
 
 impl Display for Task {
@@ -182,6 +204,16 @@ impl Display for Task {
                 region.get_id(),
                 auto_split
             ),
+
+            Task::RegionSizeTask {
+                region, auto_split, ..
+            } => write!(
+                f,
+                "[cal region size worker] Split Check Task for {}, auto_split: {:?}",
+                region.get_id(),
+                auto_split
+            ),
+
             Task::ChangeConfig(_) => write!(f, "[split check worker] Change Config Task"),
             #[cfg(any(test, feature = "testexport"))]
             Task::Validate(_) => write!(f, "[split check worker] Validate config"),
@@ -406,6 +438,95 @@ where
         }
     }
 
+
+    /// Checks a Region with split and bucket checkers to produce split keys and buckets keys and generates split admin command.
+    fn cal_region_size(
+        &mut self,
+        region: &Region,
+        auto_split: bool,
+        policy: CheckPolicy,
+        bucket_ranges: Option<Vec<BucketRange>>,
+    ) {
+        let region_id = region.get_id();
+        let start_key = keys::enc_start_key(region);
+        let end_key = keys::enc_end_key(region);
+        debug!(
+            "executing task";
+            "region_id" => region_id,
+            "start_key" => log_wrappers::Value::key(&start_key),
+            "end_key" => log_wrappers::Value::key(&end_key),
+            "policy" => ?policy,
+        );
+        CHECK_SPILT_COUNTER.all.inc();
+        let mut host =
+            self.coprocessor
+                .new_split_checker_host(region, &self.engine, auto_split, policy);
+
+        if host.skip() {
+            debug!("skip split check"; "region_id" => region.get_id());
+            return;
+        }
+
+        let split_keys = match host.policy() {
+            CheckPolicy::Scan => {
+                match self.scan_split_keys(&mut host, region, &start_key, &end_key, bucket_ranges) {
+                    Ok(keys) => keys,
+                    Err(e) => {
+                        error!(%e; "failed to scan split key"; "region_id" => region_id,);
+                        return;
+                    }
+                }
+            }
+            CheckPolicy::Approximate => match host.approximate_split_keys(region, &self.engine) {
+                Ok(keys) => {
+                    if host.enable_region_bucket() {
+                        if let Err(e) =
+                            self.approximate_check_bucket(region, &mut host, bucket_ranges)
+                        {
+                            error!(%e;
+                                "approximate_check_bucket failed";
+                                "region_id" => region_id,
+                            );
+                        }
+                    }
+                    keys.into_iter()
+                        .map(|k| keys::origin_key(&k).to_vec())
+                        .collect()
+                }
+                Err(e) => {
+                    error!(%e;
+                        "failed to get approximate split key, try scan way";
+                        "region_id" => region_id,
+                    );
+                    match self.scan_split_keys(
+                        &mut host,
+                        region,
+                        &start_key,
+                        &end_key,
+                        bucket_ranges,
+                    ) {
+                        Ok(keys) => keys,
+                        Err(e) => {
+                            error!(%e; "failed to scan split key"; "region_id" => region_id,);
+                            return;
+                        }
+                    }
+                }
+            },
+            CheckPolicy::Usekey => vec![], // Handled by pd worker directly.
+        };
+
+        if !split_keys.is_empty() {
+            CHECK_SPILT_COUNTER.success.inc();
+        } else {
+            debug!(
+                "no need to send, split key not found";
+                "region_id" => region_id,
+            );
+            CHECK_SPILT_COUNTER.ignore.inc();
+        }
+    }
+
     /// Gets the split keys by scanning the range.
     /// bucket_ranges: specify the ranges to generate buckets.
     ///                If none, gengerate buckets for the whole region.
@@ -566,6 +687,14 @@ where
                 policy,
                 bucket_ranges,
             } => self.check_split_and_bucket(&region, auto_split, policy, bucket_ranges),
+
+            Task::RegionSizeTask {
+                region,
+                auto_split,
+                policy,
+                bucket_ranges,
+            } => self.cal_region_size(&region, auto_split, policy, bucket_ranges),
+
             Task::ChangeConfig(c) => self.change_cfg(c),
             Task::ApproximateBuckets(region) => {
                 if self.coprocessor.cfg.enable_region_bucket {
