@@ -956,7 +956,9 @@ where
     }
 
     fn on_gc_snap(&mut self, snaps: Vec<(SnapKey, bool)>) {
-        let is_applying_snap = self.fsm.peer.is_handling_snapshot();
+        //let is_applying_snap = self.fsm.peer.is_handling_snapshot();
+        let is_applying_snap = self.fsm.peer.is_handling_snapshot() || s.peer_state() == Some(PeerState::Applying);
+
         let s = self.fsm.peer.get_store();
         let compacted_idx = s.truncated_index();
         let compacted_term = s.truncated_term();
@@ -1009,7 +1011,7 @@ where
                     }
                 }
             } else if key.term <= compacted_term
-                && (key.idx < compacted_idx || key.idx == compacted_idx && !is_applying_snap)
+                && (key.idx < compacted_idx || (key.idx == compacted_idx && !is_applying_snap))
             {
                 info!(
                     "deleting applied snap file";
@@ -2254,6 +2256,12 @@ where
         // The initialized flag implicitly means whether apply fsm exists or not.
         if job.initialized {
             // Destroy the apply fsm first, wait for the reply msg from apply fsm
+            info!(
+                "schedule ApplyTask::destroy";
+                "region_id" => job.region_id,
+                "peer_id" => self.fsm.peer_id(),
+            );
+            
             self.ctx
                 .apply_router
                 .schedule_task(job.region_id, ApplyTask::destroy(job.region_id, false));
