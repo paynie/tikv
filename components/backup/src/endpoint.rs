@@ -701,6 +701,9 @@ impl<E: Engine, R: RegionInfoProvider + Clone + 'static> Endpoint<E, R> {
         let store_id = self.store_id;
         let concurrency_manager = self.concurrency_manager.clone();
         let batch_size = self.config_manager.0.read().unwrap().batch_size;
+
+        info!("before run backup worker"; "batch_size" => batch_size);
+
         let sst_max_size = self.config_manager.0.read().unwrap().sst_max_size.0;
         let config = BackendConfig {
             hdfs_config: HdfsConfig {
@@ -893,6 +896,9 @@ impl<E: Engine, R: RegionInfoProvider + Clone + 'static> Endpoint<E, R> {
         )));
         let concurrency = self.config_manager.0.read().unwrap().num_threads;
         self.pool.borrow_mut().adjust_with(concurrency);
+
+        info!("before run backup worker"; "concurrency" => concurrency);
+
         for _ in 0..concurrency {
             self.spawn_backup_worker(prs.clone(), request.clone(), resp.clone());
         }
