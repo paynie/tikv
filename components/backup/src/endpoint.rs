@@ -911,7 +911,7 @@ impl<E: Engine, R: RegionInfoProvider + Clone + 'static> Endpoint<E, R> {
             request.cf,
         )));
 
-        let concurrency = if is_raw_key {
+        let concurrency = if is_raw_kv {
             // Check concurrent from request first
             let req_concurrency_batchsize = request.concurrency;
             let req_concurrency = (req_concurrency_batchsize >> 16) & 0xffff;
