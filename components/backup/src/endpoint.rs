@@ -24,6 +24,7 @@ use raft::StateRole;
 use raftstore::coprocessor::RegionInfoProvider;
 use raftstore::store::util::find_peer;
 use tikv::config::BackupConfig;
+use tikv::storage::key_prefix::is_raw_key;
 use tikv::storage::kv::{CursorBuilder, Engine, ScanMode, SnapContext};
 use tikv::storage::mvcc::Error as MvccError;
 use tikv::storage::txn::{
@@ -54,6 +55,7 @@ struct Request {
     start_ts: TimeStamp,
     end_ts: TimeStamp,
     limiter: Limiter,
+    concurrency: u32,
     backend: StorageBackend,
     cancel: Arc<AtomicBool>,
     is_raw_kv: bool,
@@ -119,6 +121,7 @@ impl Task {
                 end_ts: req.get_end_version().into(),
                 backend: req.get_storage_backend().clone(),
                 limiter,
+                concurrency: req.get_concurrency(),
                 cancel: cancel.clone(),
                 is_raw_kv: req.get_is_raw_kv(),
                 cf,
@@ -700,7 +703,20 @@ impl<E: Engine, R: RegionInfoProvider + Clone + 'static> Endpoint<E, R> {
         let db = self.db.clone();
         let store_id = self.store_id;
         let concurrency_manager = self.concurrency_manager.clone();
-        let batch_size = self.config_manager.0.read().unwrap().batch_size;
+
+        let batch_size = if request.is_raw_kv {
+            let req_concurrency_batchsize = request.concurrency;
+            let req_batchsize = (req_concurrency_batchsize & 0xffff);
+            if req_batchsize <= 0 || req_batchsize > 64 {
+                self.config_manager.0.read().unwrap().batch_size
+            } else {
+                req_batchsize
+            }
+        } else {
+            self.config_manager.0.read().unwrap().batch_size
+        };
+
+        //let batch_size = self.config_manager.0.read().unwrap().batch_size;
 
         info!("before run backup worker"; "batch_size" => batch_size);
 
@@ -894,7 +910,21 @@ impl<E: Engine, R: RegionInfoProvider + Clone + 'static> Endpoint<E, R> {
             is_raw_kv,
             request.cf,
         )));
-        let concurrency = self.config_manager.0.read().unwrap().num_threads;
+
+        let concurrency = if is_raw_key {
+            // Check concurrent from request first
+            let req_concurrency_batchsize = request.concurrency;
+            let req_concurrency = (req_concurrency_batchsize >> 16) & 0xffff;
+            if req_concurrency <= 0 || req_concurrency > 64 {
+                self.config_manager.0.read().unwrap().num_threads
+            } else {
+                req_concurrency
+            }
+        } else {
+            self.config_manager.0.read().unwrap().num_threads
+        };
+
+        //let concurrency = self.config_manager.0.read().unwrap().num_threads;
         self.pool.borrow_mut().adjust_with(concurrency);
 
         info!("before run backup worker"; "concurrency" => concurrency);
