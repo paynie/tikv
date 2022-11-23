@@ -710,7 +710,7 @@ impl<E: Engine, R: RegionInfoProvider + Clone + 'static> Endpoint<E, R> {
             if req_batchsize <= 0 || req_batchsize > 64 {
                 self.config_manager.0.read().unwrap().batch_size
             } else {
-                req_batchsize
+                req_batchsize as usize
             }
         } else {
             self.config_manager.0.read().unwrap().batch_size
@@ -918,7 +918,7 @@ impl<E: Engine, R: RegionInfoProvider + Clone + 'static> Endpoint<E, R> {
             if req_concurrency <= 0 || req_concurrency > 64 {
                 self.config_manager.0.read().unwrap().num_threads
             } else {
-                req_concurrency
+                req_concurrency as usize
             }
         } else {
             self.config_manager.0.read().unwrap().num_threads
