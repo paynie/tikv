@@ -1104,9 +1104,10 @@ where
         };
 
         //let is_applying_snap = self.fsm.peer.is_handling_snapshot();
+        
+        let s = self.fsm.peer.get_store();
         let is_applying_snap = self.fsm.peer.is_handling_snapshot() || s.peer_state() == Some(PeerState::Applying);
 
-        let s = self.fsm.peer.get_store();
         let compacted_idx = s.truncated_index();
         let compacted_term = s.truncated_term();
         for (key, is_sending) in snaps {
