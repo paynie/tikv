@@ -86,6 +86,9 @@ impl<S: Snapshot, L: LockManager> WriteCommand<S, L> for RawWriteWithVersion {
         let store = RawStore::new(snapshot, self.api_version);
 
         kvs.into_iter().zip(ttls).for_each(|((key, value), ttl)| {
+
+            info!("Write with version ttl"; "new ttl" => ttl, "key str = " => key.to_string());
+
             // Generate version key
             let version_key = key.get_version_key();
 

@@ -86,7 +86,7 @@ impl<S: Snapshot, L: LockManager> WriteCommand<S, L> for RawCompareAndSwap {
             let (cf, key, value, previous_version, ctx, enable_write_with_version) =
             (self.cf, self.key, self.value, self.previous_value, self.ctx, self.enable_write_with_version);
 
-            info!("Use version key and value to cas");
+            info!("Use version key and value to cas"; "new ttl" => self.ttl, "key str = " => key.to_string());
 
             // Generate version key
             let version_key = key.get_version_key();
