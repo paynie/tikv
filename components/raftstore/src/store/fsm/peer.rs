@@ -4045,7 +4045,7 @@ where
     }
 
     fn on_split_region_check_tick(&mut self) {
-        info!("on_split_region_check_tick");
+        //info!("on_split_region_check_tick");
 
         // If region split not enable, just return
         //if !self.ctx.cfg.region_split_enable {

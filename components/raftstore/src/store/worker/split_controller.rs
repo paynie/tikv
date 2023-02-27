@@ -414,7 +414,7 @@ impl AutoSplitController {
             let byte = region_infos
                 .iter()
                 .fold(0, |flow, region_info| flow + region_info.flow.read_bytes);
-            info!("load base split params";"region_id"=>region_id,"qps"=>qps,"qps_threshold"=>self.cfg.qps_threshold,"byte"=>byte,"byte_threshold"=>self.cfg.byte_threshold);
+            //info!("load base split params";"region_id"=>region_id,"qps"=>qps,"qps_threshold"=>self.cfg.qps_threshold,"byte"=>byte,"byte_threshold"=>self.cfg.byte_threshold);
 
             if qps < self.cfg.qps_threshold && byte < self.cfg.byte_threshold {
                 self.recorders.remove_entry(&region_id);
