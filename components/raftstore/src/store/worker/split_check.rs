@@ -286,7 +286,7 @@ where
         let region_id = region.get_id();
         let start_key = keys::enc_start_key(region);
         let end_key = keys::enc_end_key(region);
-        info!(
+        debug!(
             "executing task";
             "region_id" => region_id,
             "start_key" => log_wrappers::Value::key(&start_key),
