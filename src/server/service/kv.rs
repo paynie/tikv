@@ -1308,7 +1308,6 @@ fn handle_batch_commands_request<E: Engine, L: LockManager, F: KvFormat>(
         RawBatchGet, future_raw_batch_get(storage), raw_batch_get;
         RawPut, future_raw_put(storage), raw_put;
         RawBatchPut, future_raw_batch_put(storage), raw_batch_put;
-        RawBatchWrite, future_raw_batch_write(storage), raw_batch_write;
         RawDelete, future_raw_delete(storage), raw_delete;
         RawBatchDelete, future_raw_batch_delete(storage), raw_batch_delete;
         RawScan, future_raw_scan(storage), raw_scan;
