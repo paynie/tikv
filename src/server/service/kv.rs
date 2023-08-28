@@ -1711,7 +1711,7 @@ fn future_raw_batch_write<E: Engine, L: LockManager, F: KvFormat>(
     let write_ops = req
         .take_batch()
         .into_iter()
-        .map(|mut x| (x.take_key(), x.take_value(), x.take_op()))
+        .map(|mut x| (x.take_key(), x.take_value(), x.get_op()))
         .collect();
 
     let (cb, f) = paired_future_callback();
