@@ -1,9 +1,10 @@
 use api_version::{match_template_api_version, KvFormat, RawValue};
 use engine_traits::{raw_ttl::ttl_to_expire_ts, CfName, CF_DEFAULT};
 use kvproto::kvrpcpb::ApiVersion;
+use kvproto::kvrpcpb::Op;
 use raw::RawStore;
 use tikv_kv::Statistics;
-use txn_types::{Key, Value, KvPair};
+use txn_types::{Key, Value, KvPair, KvWithOp};
 
 use crate::storage::{
     kv::{Modify, WriteData},
