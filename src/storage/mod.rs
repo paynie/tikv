@@ -72,6 +72,11 @@ use kvproto::{
     },
     pdpb::QueryKind,
 };
+
+use kvproto::kvrpcpb::Op;
+use kvproto::kvrpcpb::Op::Put;
+use kvproto::kvrpcpb::Op::Del;
+
 use pd_client::FeatureGate;
 use raftstore::store::{util::build_key_range, ReadStats, TxnExt, WriteStats};
 use rand::prelude::*;
@@ -381,6 +386,7 @@ impl<E: Engine, L: LockManager, F: KvFormat> Storage<E, L, F> {
                 | CommandKind::raw_batch_scan
                 | CommandKind::raw_put
                 | CommandKind::raw_batch_put
+                | CommandKind::raw_batch_write
                 | CommandKind::raw_delete
                 | CommandKind::raw_delete_range
                 | CommandKind::raw_batch_delete
@@ -1849,6 +1855,52 @@ impl<E: Engine, L: LockManager, F: KvFormat> Storage<E, L, F> {
             return Err(Error::from(ErrorInner::TtlLenNotEqualsToPairs));
         }
 
+        let modifies = write_ops
+            .into_iter()
+            .zip(ttls)
+            .flat_map(|((k, v, op), ttl)| {
+                if op == Del {  
+                    let m = Modify::Delete(
+                        cf,
+                        F::encode_raw_key_owned(k, None),
+                    );
+    
+                    vec![m]
+                } else {
+                    let raw_value = RawValue {
+                        user_value: v,
+                        expire_ts: ttl_to_expire_ts(ttl),
+                        is_delete: false,
+                    };
+    
+                    let m = Modify::Put(
+                        cf,
+                        F::encode_raw_key_owned(k, None),
+                        F::encode_raw_value_owned(raw_value),
+                    );
+    
+                    vec![m]
+                }
+
+            }).collect();
+
+
+        Ok(modifies)
+    }
+
+    fn raw_batch_write_requests_to_modifies(
+        cf: CfName,
+        write_ops: Vec<KvWithOp>,
+        ttls: Vec<u64>,
+    ) -> Result<Vec<Modify>> {
+        if !F::IS_TTL_ENABLED {
+            if ttls.iter().any(|&x| x != 0) {
+                return Err(Error::from(ErrorInner::TtlNotEnabled));
+            }
+        } else if ttls.len() != pairs.len() {
+            return Err(Error::from(ErrorInner::TtlLenNotEqualsToPairs));
+        }
+
         let modifies = pairs
             .into_iter()
             .zip(ttls)
@@ -1906,6 +1958,43 @@ impl<E: Engine, L: LockManager, F: KvFormat> Storage<E, L, F> {
         );
 
         let modifies = Self::raw_batch_put_requests_to_modifies(cf, pairs, ttls)?;
+        let mut batch = WriteData::from_modifies(modifies);
+        batch.set_allowed_on_disk_almost_full();
+
+        self.engine.async_write(
+            &ctx,
+            batch,
+            Box::new(|res| callback(res.map_err(Error::from))),
+        )?;
+        KV_COMMAND_COUNTER_VEC_STATIC.raw_batch_put.inc();
+        Ok(())
+    }
+
+    /// Write some keys to the storage in a batch.
+    pub fn raw_batch_write(
+        &self,
+        ctx: Context,
+        cf: String,
+        write_ops: Vec<KvWithOp>,
+        ttls: Vec<u64>,
+        callback: Callback<()>,
+    ) -> Result<()> {
+        Self::check_api_version(
+            self.api_version,
+            ctx.api_version,
+            CommandKind::raw_batch_write,
+            write_ops.iter().map(|(ref k, _, _)| k),
+        )?;
+
+        let cf = Self::rawkv_cf(&cf, self.api_version)?;
+
+        check_key_size!(
+            write_ops.iter().map(|(ref k, _, _)| k),
+            self.max_key_size,
+            callback
+        );
+
+        let modifies = Self::raw_batch_write_requests_to_modifies(cf, write_ops, ttls)?;
         let mut batch = WriteData::from_modifies(modifies);
         batch.set_allowed_on_disk_almost_full();
 

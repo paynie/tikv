@@ -2,6 +2,8 @@ use api_version::{match_template_api_version, KvFormat, RawValue};
 use engine_traits::{raw_ttl::ttl_to_expire_ts, CfName, CF_DEFAULT};
 use kvproto::kvrpcpb::ApiVersion;
 use kvproto::kvrpcpb::Op;
+use kvproto::kvrpcpb::Op::Put;
+use kvproto::kvrpcpb::Op::Del;
 use raw::RawStore;
 use tikv_kv::Statistics;
 use txn_types::{Key, Value, KvPair, KvWithOp};
@@ -50,7 +52,7 @@ impl CommandExt for RawWriteWithOpVersion {
         // Key len + value len + key len + ttl length
         self.write_ops.iter().map(|kv_with_op| 
             {
-                if kv_with_op.op == Delete {
+                if kv_with_op.op == Del {
                     cf_size + kv.0.len() + kv.0.len() + 4
                 } else {
                     cf_size + kv.0.len() + kv.1.len() + kv.0.len() + 4 + 8
