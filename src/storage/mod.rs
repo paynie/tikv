@@ -81,7 +81,7 @@ use tikv_util::{
     quota_limiter::QuotaLimiter,
     time::{duration_to_ms, Instant, ThreadReadId},
 };
-use txn_types::{Key, KvPair, Lock, OldValues, TimeStamp, TsSet, Value};
+use txn_types::{Key, KvPair, KvWithOp, Lock, OldValues, TimeStamp, TsSet, Value};
 
 pub use self::{
     errors::{get_error_kind_from_header, get_tag_from_header, Error, ErrorHeaderKind, ErrorInner},
@@ -105,7 +105,7 @@ use crate::{
         metrics::{CommandKind, *},
         mvcc::{MvccReader, PointGetterBuilder},
         txn::{
-            commands::{RawAtomicStore, RawCompareAndSwap, TypedCommand, RawSetKeyTTL, RawWriteWithVersion},
+            commands::{RawAtomicStore, RawCompareAndSwap, TypedCommand, RawSetKeyTTL, RawWriteWithVersion, RawWriteWithOpVersion},
             flow_controller::FlowController,
             scheduler::Scheduler as TxnScheduler,
             Command,
@@ -1836,6 +1836,51 @@ impl<E: Engine, L: LockManager, F: KvFormat> Storage<E, L, F> {
         Ok(modifies)
     }
 
+    fn raw_batch_write_requests_to_modifies(
+        cf: CfName,
+        write_ops: Vec<KvWithOp>,
+        ttls: Vec<u64>,
+    ) -> Result<Vec<Modify>> {
+        if !F::IS_TTL_ENABLED {
+            if ttls.iter().any(|&x| x != 0) {
+                return Err(Error::from(ErrorInner::TtlNotEnabled));
+            }
+        } else if ttls.len() != pairs.len() {
+            return Err(Error::from(ErrorInner::TtlLenNotEqualsToPairs));
+        }
+
+        let modifies = pairs
+            .into_iter()
+            .zip(ttls)
+            .flat_map(|((k, v, op), ttl)| {
+                if op == Delete {
+                    let m = Modify::Delete(
+                        cf,
+                        F::encode_raw_key_owned(k, None),
+                    );
+    
+                    vec![m]
+                } else {
+                    let raw_value = RawValue {
+                        user_value: v,
+                        expire_ts: ttl_to_expire_ts(ttl),
+                        is_delete: false,
+                    };
+    
+                    let m = Modify::Put(
+                        cf,
+                        F::encode_raw_key_owned(k, None),
+                        F::encode_raw_value_owned(raw_value),
+                    );
+    
+                    vec![m]
+                }
+            }).collect();
+
+
+        Ok(modifies)
+    }
+
     /// Write some keys to the storage in a batch.
     pub fn raw_batch_put(
         &self,
@@ -2440,6 +2485,49 @@ impl<E: Engine, L: LockManager, F: KvFormat> Storage<E, L, F> {
 
         } else {
             let modifies = Self::raw_batch_put_requests_to_modifies(cf, pairs, ttls)?;
+            let cmd = RawAtomicStore::new(cf, modifies, ctx);
+            self.sched_txn_command(cmd, callback)
+        }
+    }
+
+    pub fn raw_batch_write_atomic(
+        &self,
+        ctx: Context,
+        cf: String,
+        write_ops: Vec<KvWithOp>,
+        ttls: Vec<u64>,
+        callback: Callback<()>,
+        enable_write_with_version: bool,
+    ) -> Result<()> {
+        Self::check_api_version(
+            self.api_version,
+            ctx.api_version,
+            CommandKind::raw_atomic_store,
+            write_ops.iter().map(|(ref k, _, _)| k),
+        )?;
+
+        let cf = Self::rawkv_cf(&cf, self.api_version)?;
+        
+        if enable_write_with_version {
+            // Check ttls
+            if !F::IS_TTL_ENABLED {
+                if ttls.iter().any(|&x| x != 0) {
+                    return Err(Error::from(ErrorInner::TtlNotEnabled));
+                }
+            } else if ttls.len() != pairs.len() {
+                return Err(Error::from(ErrorInner::TtlLenNotEqualsToPairs));
+            }
+
+            // Transform KvPair to (Key, Value)
+            let kv_with_ops = write_ops.into_iter().flat_map(|(k, v, op)| {
+                let kv_with_op = (F::encode_raw_key_owned(k, None), v, op);
+                vec![kv_with_op]
+            }).collect();
+            let cmd = RawWriteWithOpVersion::new(cf, kv_with_ops, ttls, self.api_version, ctx);
+            self.sched_txn_command(cmd, callback)
+
+        } else {
+            let modifies = Self::raw_batch_write_requests_to_modifies(cf, pairs, ttls)?;
             let cmd = RawAtomicStore::new(cf, modifies, ctx);
             self.sched_txn_command(cmd, callback)
         }

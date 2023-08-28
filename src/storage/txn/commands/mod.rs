@@ -40,6 +40,7 @@ pub use commit::Commit;
 pub use compare_and_swap::RawCompareAndSwap;
 pub use set_ttl::RawSetKeyTTL;
 pub use write_with_version::RawWriteWithVersion;
+pub use write_with_op_version::RawWriteWithOpVersion;
 use concurrency_manager::{ConcurrencyManager, KeyHandleGuard};
 use kvproto::kvrpcpb::*;
 pub use mvcc_by_key::MvccByKey;
@@ -96,6 +97,7 @@ pub enum Command {
     RawAtomicStore(RawAtomicStore),
     RawSetKeyTTL(RawSetKeyTTL),
     RawWriteWithVersion(RawWriteWithVersion),
+    RawWriteWithOpVersion(RawWriteWithOpVersion),
 }
 
 /// A `Command` with its return type, reified as the generic parameter `T`.
@@ -566,6 +568,7 @@ impl Command {
             Command::RawAtomicStore(t) => t,
             Command::RawSetKeyTTL(t) => t,
             Command::RawWriteWithVersion(t) => t,
+            Command::RawWriteWithOpVersion(t) => t,
         }
     }
 
@@ -591,6 +594,7 @@ impl Command {
             Command::RawAtomicStore(t) => t,
             Command::RawSetKeyTTL(t) => t,
             Command::RawWriteWithVersion(t) => t,
+            Command::RawWriteWithOpVersion(t) => t,
         }
     }
 
@@ -630,6 +634,7 @@ impl Command {
             Command::RawAtomicStore(t) => t.process_write(snapshot, context),
             Command::RawSetKeyTTL(t) => t.process_write(snapshot, context),
             Command::RawWriteWithVersion(t) => t.process_write(snapshot, context),
+            Command::RawWriteWithOpVersion(t) => t.process_write(snapshot, context),
             _ => panic!("unsupported write command"),
         }
     }

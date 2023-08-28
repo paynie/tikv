@@ -87,7 +87,7 @@ impl<S: Snapshot, L: LockManager> WriteCommand<S, L> for RawWriteWithVersion {
 
         kvs.into_iter().zip(ttls).for_each(|((key, value), ttl)| {
 
-            info!("Write with version ttl"; "new ttl" => ttl, "key str = " => key.to_string());
+            //info!("Write with version ttl"; "new ttl" => ttl, "key str = " => key.to_string());
 
             // Generate version key
             let version_key = key.get_version_key();

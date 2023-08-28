@@ -86,7 +86,7 @@ impl<S: Snapshot, L: LockManager> WriteCommand<S, L> for RawCompareAndSwap {
             let (cf, key, value, previous_version, ctx, enable_write_with_version) =
             (self.cf, self.key, self.value, self.previous_value, self.ctx, self.enable_write_with_version);
 
-            info!("Use version key and value to cas"; "new ttl" => self.ttl, "key str = " => key.to_string());
+            //info!("Use version key and value to cas"; "new ttl" => self.ttl, "key str = " => key.to_string());
 
             // Generate version key
             let version_key = key.get_version_key();
@@ -104,7 +104,7 @@ impl<S: Snapshot, L: LockManager> WriteCommand<S, L> for RawCompareAndSwap {
                     // Decode the version to int64
                     let old_version_u64 = decode_u64(v);
     
-                    info!("Old version is not null"; "old_version_u64" => old_version_u64);
+                    //info!("Old version is not null"; "old_version_u64" => old_version_u64);
     
                     match previous_version{
                         Some(ref pv) => {
@@ -112,7 +112,7 @@ impl<S: Snapshot, L: LockManager> WriteCommand<S, L> for RawCompareAndSwap {
                             // Decode previous version to u64
                             let previous_version_u64 = decode_u64(pv);
     
-                            info!("Use set version is not null"; "previous_version_u64" => previous_version_u64);
+                            //info!("Use set version is not null"; "previous_version_u64" => previous_version_u64);
     
                             if old_version_u64 == previous_version_u64 {
                                 // CAS success, update value and version
@@ -166,7 +166,7 @@ impl<S: Snapshot, L: LockManager> WriteCommand<S, L> for RawCompareAndSwap {
                         }
     
                         None => {
-                            info!("Use set version is null");
+                            //info!("Use set version is null");
                             // User not set previous version, just return false and current version
                             ProcessResult::RawCompareAndSwapRes {
                                 previous_value: old_version,
@@ -178,12 +178,12 @@ impl<S: Snapshot, L: LockManager> WriteCommand<S, L> for RawCompareAndSwap {
     
                 None => {
                     // Can not find old version
-                    info!("Old version is null");
+                    //info!("Old version is null");
     
                     match previous_version {
                         Some(ref _pv) => {
                             // User set previous version, just return false
-                            info!("Use set version is not null");
+                            //info!("Use set version is not null");
                             ProcessResult::RawCompareAndSwapRes {
                                 previous_value: old_version,
                                 succeed: false,
@@ -191,7 +191,7 @@ impl<S: Snapshot, L: LockManager> WriteCommand<S, L> for RawCompareAndSwap {
                         }
     
                         None => {
-                            info!("Use set version is null");
+                            //info!("Use set version is null");
                             // Version key does not exist
                             // Has not previous version
                             let new_version_u64 = 0;

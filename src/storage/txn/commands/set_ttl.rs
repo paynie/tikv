@@ -56,7 +56,7 @@ impl<S: Snapshot, L: LockManager> WriteCommand<S, L> for RawSetKeyTTL {
         let store = RawStore::new(snapshot, self.api_version);
         if enable_write_with_version {
 
-            info!("Set ttl"; "new ttl" => self.ttl, "key str = " => key.to_string());
+            //info!("Set ttl"; "new ttl" => self.ttl, "key str = " => key.to_string());
 
             // Generate version key
             let version_key = key.get_version_key();    

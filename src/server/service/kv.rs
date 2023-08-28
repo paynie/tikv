@@ -321,6 +321,14 @@ impl<T: RaftStoreRouter<E::Local> + 'static, E: Engine, L: LockManager, F: KvFor
         RawBatchPutRequest,
         RawBatchPutResponse
     );
+
+    handle_request!(
+        raw_batch_write,
+        future_raw_batch_write,
+        RawBatchWriteRequest,
+        RawBatchWriteResponse
+    );
+
     handle_request!(
         raw_delete,
         future_raw_delete,
@@ -1299,6 +1307,7 @@ fn handle_batch_commands_request<E: Engine, L: LockManager, F: KvFormat>(
         RawBatchGet, future_raw_batch_get(storage), raw_batch_get;
         RawPut, future_raw_put(storage), raw_put;
         RawBatchPut, future_raw_batch_put(storage), raw_batch_put;
+        RawBatchWrite, future_raw_batch_wrote(storage), raw_batch_write;
         RawDelete, future_raw_delete(storage), raw_delete;
         RawBatchDelete, future_raw_batch_delete(storage), raw_batch_delete;
         RawScan, future_raw_scan(storage), raw_scan;
@@ -1671,6 +1680,54 @@ fn future_raw_batch_put<E: Engine, L: LockManager, F: KvFormat>(
             Ok(_) => f.await?,
         };
         let mut resp = RawBatchPutResponse::default();
+        if let Some(err) = extract_region_error(&v) {
+            resp.set_region_error(err);
+        } else if let Err(e) = v {
+            resp.set_error(format!("{}", e));
+        }
+        Ok(resp)
+    }
+}
+
+fn future_raw_batch_write<E: Engine, L: LockManager, F: KvFormat>(
+    storage: &Storage<E, L, F>,
+    mut req: RawBatchWriteRequest,
+) -> impl Future<Output = ServerResult<RawBatchWriteResponse>> {
+    let cf = req.take_cf();
+    let write_batch_len = req.get_batch().len();
+    // The TTL for each key in seconds.
+    //
+    // In some TiKV of old versions, only one TTL can be provided and the TTL will be applied to all keys in
+    // the request. For compatibility reasons, if the length of `ttls` is exactly one, then the TTL will be applied
+    // to all keys. Otherwise, the length mismatch between `ttls` and `pairs` will return an error.
+    let ttls = if req.get_ttls().is_empty() {
+        vec![0; pairs_len]
+    } else if req.get_ttls().len() == 1 {
+        vec![req.get_ttls()[0]; pairs_len]
+    } else {
+        req.take_ttls()
+    };
+    let write_ops = req
+        .take_batch()
+        .into_iter()
+        .map(|mut x| (x.take_key(), x.take_value(), x.take_op()))
+        .collect();
+
+    let (cb, f) = paired_future_callback();
+    let for_atomic = req.get_for_cas();
+
+    let res = if for_atomic {
+        storage.raw_batch_write_atomic(req.take_context(), cf, write_ops, ttls, cb, true)
+    } else {
+        storage.raw_batch_write(req.take_context(), cf, write_ops, ttls, cb)
+    };
+
+    async move {
+        let v = match res {
+            Err(e) => Err(e),
+            Ok(_) => f.await?,
+        };
+        let mut resp = RawBatchWriteResponse::default();
         if let Some(err) = extract_region_error(&v) {
             resp.set_region_error(err);
         } else if let Err(e) = v {
