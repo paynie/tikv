@@ -13,6 +13,7 @@ pub(crate) mod commit;
 pub(crate) mod compare_and_swap;
 pub(crate) mod set_ttl;
 pub(crate) mod write_with_version;
+pub(crate) mod write_with_op_version;
 pub(crate) mod mvcc_by_key;
 pub(crate) mod mvcc_by_start_ts;
 pub(crate) mod pause;
