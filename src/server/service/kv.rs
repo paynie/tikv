@@ -1701,9 +1701,9 @@ fn future_raw_batch_write<E: Engine, L: LockManager, F: KvFormat>(
     // the request. For compatibility reasons, if the length of `ttls` is exactly one, then the TTL will be applied
     // to all keys. Otherwise, the length mismatch between `ttls` and `pairs` will return an error.
     let ttls = if req.get_ttls().is_empty() {
-        vec![0; pairs_len]
+        vec![0; write_batch_len]
     } else if req.get_ttls().len() == 1 {
-        vec![req.get_ttls()[0]; pairs_len]
+        vec![req.get_ttls()[0]; write_batch_len]
     } else {
         req.take_ttls()
     };
