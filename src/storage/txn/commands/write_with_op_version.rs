@@ -53,9 +53,9 @@ impl CommandExt for RawWriteWithOpVersion {
         self.write_ops.iter().map(|kv_with_op| 
             {
                 if kv_with_op.op == Del {
-                    cf_size + kv.0.len() + kv.0.len() + 4
+                    cf_size + kv_with_op.0.len() + kv_with_op.0.len() + 4
                 } else {
-                    cf_size + kv.0.len() + kv.1.len() + kv.0.len() + 4 + 8
+                    cf_size + kv_with_op.0.len() + kv_with_op.1.len() + kv_with_op.0.len() + 4 + 8
                 }
             }).sum()
     }
