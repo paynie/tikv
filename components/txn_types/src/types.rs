@@ -6,6 +6,7 @@ use bitflags::bitflags;
 use byteorder::{ByteOrder, NativeEndian};
 use collections::HashMap;
 use kvproto::kvrpcpb::{self, Assertion};
+use kvproto::kvrpcpb::Op
 use tikv_util::{
     codec,
     codec::{
