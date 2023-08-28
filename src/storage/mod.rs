@@ -2558,7 +2558,7 @@ impl<E: Engine, L: LockManager, F: KvFormat> Storage<E, L, F> {
                 if ttls.iter().any(|&x| x != 0) {
                     return Err(Error::from(ErrorInner::TtlNotEnabled));
                 }
-            } else if ttls.len() != pairs.len() {
+            } else if ttls.len() != write_ops.len() {
                 return Err(Error::from(ErrorInner::TtlLenNotEqualsToPairs));
             }
 
@@ -2571,7 +2571,7 @@ impl<E: Engine, L: LockManager, F: KvFormat> Storage<E, L, F> {
             self.sched_txn_command(cmd, callback)
 
         } else {
-            let modifies = Self::raw_batch_write_requests_to_modifies(cf, pairs, ttls)?;
+            let modifies = Self::raw_batch_write_requests_to_modifies(cf, write_ops, ttls)?;
             let cmd = RawAtomicStore::new(cf, modifies, ctx);
             self.sched_txn_command(cmd, callback)
         }
