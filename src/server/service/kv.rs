@@ -1582,7 +1582,7 @@ fn future_raw_put<E: Engine, L: LockManager, F: KvFormat>(
             vec![(req.take_key(), req.take_value())],
             vec![req.get_ttl()],
             cb,
-            true,
+            false,
         )
     } else {
         storage.raw_put(
@@ -1623,7 +1623,7 @@ fn future_raw_set_key_ttl<E: Engine, L: LockManager, F: KvFormat>(
         req.take_key(),
         req.get_ttl(),
         cb,
-        true,
+        false,
     );
 
     async move {
@@ -1669,7 +1669,7 @@ fn future_raw_batch_put<E: Engine, L: LockManager, F: KvFormat>(
     let for_atomic = req.get_for_cas();
 
     let res = if for_atomic {
-        storage.raw_batch_put_atomic(req.take_context(), cf, pairs, ttls, cb, true)
+        storage.raw_batch_put_atomic(req.take_context(), cf, pairs, ttls, cb, false)
     } else {
         storage.raw_batch_put(req.take_context(), cf, pairs, ttls, cb)
     };
@@ -1717,7 +1717,7 @@ fn future_raw_batch_write<E: Engine, L: LockManager, F: KvFormat>(
     let for_atomic = req.get_for_cas();
 
     let res = if for_atomic {
-        storage.raw_batch_write_atomic(req.take_context(), cf, write_ops, ttls, cb, true)
+        storage.raw_batch_write_atomic(req.take_context(), cf, write_ops, ttls, cb, false)
     } else {
         storage.raw_batch_write(req.take_context(), cf, write_ops, ttls, cb)
     };
@@ -1744,7 +1744,7 @@ fn future_raw_delete<E: Engine, L: LockManager, F: KvFormat>(
     let (cb, f) = paired_future_callback();
     let for_atomic = req.get_for_cas();
     let res = if for_atomic {
-        storage.raw_batch_delete_atomic(req.take_context(), req.take_cf(), vec![req.take_key()], cb, true)
+        storage.raw_batch_delete_atomic(req.take_context(), req.take_cf(), vec![req.take_key()], cb, false)
     } else {
         storage.raw_delete(req.take_context(), req.take_cf(), req.take_key(), cb)
     };
@@ -1773,7 +1773,7 @@ fn future_raw_batch_delete<E: Engine, L: LockManager, F: KvFormat>(
     let (cb, f) = paired_future_callback();
     let for_atomic = req.get_for_cas();
     let res = if for_atomic {
-        storage.raw_batch_delete_atomic(req.take_context(), cf, keys, cb, true)
+        storage.raw_batch_delete_atomic(req.take_context(), cf, keys, cb, false)
     } else {
         storage.raw_batch_delete(req.take_context(), cf, keys, cb)
     };
