@@ -12,6 +12,9 @@ pub(crate) mod check_txn_status;
 pub(crate) mod cleanup;
 pub(crate) mod commit;
 pub(crate) mod compare_and_swap;
+pub(crate) mod set_ttl;
+pub(crate) mod write_with_version;
+pub(crate) mod write_with_op_version;
 pub(crate) mod flashback_to_version;
 pub(crate) mod flashback_to_version_read_phase;
 pub(crate) mod mvcc_by_key;
@@ -41,6 +44,9 @@ pub use check_txn_status::CheckTxnStatus;
 pub use cleanup::Cleanup;
 pub use commit::Commit;
 pub use compare_and_swap::RawCompareAndSwap;
+pub use set_ttl::RawSetKeyTTL;
+pub use write_with_version::RawWriteWithVersion;
+pub use write_with_op_version::RawWriteWithOpVersion;
 use concurrency_manager::{ConcurrencyManager, KeyHandleGuard};
 pub use flashback_to_version::FlashbackToVersion;
 pub use flashback_to_version_read_phase::{
@@ -108,6 +114,8 @@ pub enum Command {
     RawAtomicStore(RawAtomicStore),
     FlashbackToVersionReadPhase(FlashbackToVersionReadPhase),
     FlashbackToVersion(FlashbackToVersion),
+    RawSetKeyTTL(RawSetKeyTTL),
+    RawWriteWithVersion(RawWriteWithVersion),
 }
 
 /// A `Command` with its return type, reified as the generic parameter `T`.
@@ -632,6 +640,9 @@ impl Command {
             Command::RawAtomicStore(t) => t,
             Command::FlashbackToVersionReadPhase(t) => t,
             Command::FlashbackToVersion(t) => t,
+            Command::RawSetKeyTTL(t) => t,
+            Command::RawWriteWithVersion(t) => t,
+            Command::RawWriteWithOpVersion(t) => t,
         }
     }
 
@@ -658,6 +669,9 @@ impl Command {
             Command::RawAtomicStore(t) => t,
             Command::FlashbackToVersionReadPhase(t) => t,
             Command::FlashbackToVersion(t) => t,
+            Command::RawSetKeyTTL(t) => t,
+            Command::RawWriteWithVersion(t) => t,
+            Command::RawWriteWithOpVersion(t) => t,
         }
     }
 
@@ -698,6 +712,9 @@ impl Command {
             Command::RawCompareAndSwap(t) => t.process_write(snapshot, context),
             Command::RawAtomicStore(t) => t.process_write(snapshot, context),
             Command::FlashbackToVersion(t) => t.process_write(snapshot, context),
+            Command::RawSetKeyTTL(t) => t.process_write(snapshot, context),
+            Command::RawWriteWithVersion(t) => t.process_write(snapshot, context),
+            Command::RawWriteWithOpVersion(t) => t.process_write(snapshot, context),
             _ => panic!("unsupported write command"),
         }
     }

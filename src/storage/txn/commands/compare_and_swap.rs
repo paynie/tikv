@@ -37,6 +37,7 @@ command! {
             value: Value,
             ttl: u64,
             api_version: ApiVersion,
+            enable_write_with_version: bool,
         }
 }
 
@@ -50,8 +51,36 @@ impl CommandExt for RawCompareAndSwap {
     }
 }
 
+fn decode_u64(value: &Vec<u8>) -> u64 {
+    let mut ret:u64 = 0;
+    ret += value[0] as u64;
+    ret += (value[1] as u64) << 8;
+    ret += (value[2] as u64) << 16;
+    ret += (value[3] as u64) << 24;
+    ret += (value[4] as u64) << 32;
+    ret += (value[5] as u64) << 40;
+    ret += (value[6] as u64) << 48;
+    ret += (value[7] as u64) << 56;
+    return ret;
+}
+
+fn encode_u64(value: &u64) -> Vec<u8> {
+    let mut ret: Vec<u8> = Vec::with_capacity(8);
+    ret.push((value & 0xff) as u8);
+    ret.push(((value >> 8) & 0xff) as u8);
+    ret.push(((value >> 16) & 0xff) as u8);
+    ret.push(((value >> 24) & 0xff) as u8);
+    ret.push(((value >> 32) & 0xff) as u8);
+    ret.push(((value >> 40) & 0xff) as u8);
+    ret.push(((value >> 48) & 0xff) as u8);
+    ret.push(((value >> 56) & 0xff) as u8);
+    ret
+}
+
+
 impl<S: Snapshot, L: LockManager> WriteCommand<S, L> for RawCompareAndSwap {
     fn process_write(self, snapshot: S, wctx: WriteContext<'_, L>) -> Result<WriteResult> {
+
         let (cf, mut key, value, previous_value, ctx, raw_ext) = (
             self.cf,
             self.key,
@@ -68,41 +97,223 @@ impl<S: Snapshot, L: LockManager> WriteCommand<S, L> for RawCompareAndSwap {
             &mut Statistics::default(),
         )?;
 
-        let (pr, lock_guards) = if old_value == previous_value {
-            let raw_value = RawValue {
-                user_value: value,
-                expire_ts: ttl_to_expire_ts(self.ttl),
-                is_delete: false,
-            };
-            let encoded_raw_value = match_template_api_version!(
-                API,
-                match self.api_version {
-                    ApiVersion::API => API::encode_raw_value_owned(raw_value),
+        if self.enable_write_with_version {
+            // Generate version key
+            let version_key = key.get_version_key();
+
+            // Get old version
+            let old_version = RawStore::new(snapshot, self.api_version).raw_get_key_value(
+                cf,
+                &version_key,
+                &mut Statistics::default(),
+            )?;
+
+            let (pr, lock_guards) = match old_version {
+                Some(ref v) => {
+                    // Old version exist
+                    // Decode the version to int64
+                    let old_version_u64 = decode_u64(v);
+
+                    info!("Old version is not null"; "old_version_u64" => old_version_u64);
+
+                    match previous_version{
+                        Some(ref pv) => {
+                            // Previous version set
+                            // Decode previous version to u64
+                            let previous_version_u64 = decode_u64(pv);
+
+                            info!("Use set version is not null"; "previous_version_u64" => previous_version_u64);
+
+                            if old_version_u64 == previous_version_u64 {
+                                // CAS success, update value and version
+                                // Generate new value
+                                let raw_value = RawValue {
+                                    user_value: value,
+                                    expire_ts: ttl_to_expire_ts(self.ttl),
+                                    is_delete: false,
+                                };
+
+                                let encoded_raw_value = match_template_api_version!(
+                                    API,
+                                    match self.api_version {
+                                        ApiVersion::API => API::encode_raw_value_owned(raw_value),
+                                    }
+                                );
+
+                                if let Some(ref raw_ext) = raw_ext {
+                                    key = key.append_ts(raw_ext.ts);
+                                }
+
+                                let m = Modify::Put(cf, key, encoded_raw_value);
+                                data.push(m);
+
+                                // Generate new version
+                                let new_version_64 = previous_version_u64 + 1;
+                                let raw_version_value = RawValue {
+                                    user_value: encode_u64(&new_version_64),
+                                    expire_ts: ttl_to_expire_ts(self.ttl),
+                                    is_delete: false,
+                                };
+
+                                let encoded_raw_version_value = match_template_api_version!(
+                                    API,
+                                    match self.api_version {
+                                        ApiVersion::API => API::encode_raw_value_owned(raw_version_value),
+                                    }
+                                );
+
+                                if let Some(ref raw_ext) = raw_ext {
+                                    version_key = version_key.append_ts(raw_ext.ts);
+                                }
+
+                                let m_version = Modify::Put(cf, version_key, encoded_raw_version_value);
+                                data.push(m_version);
+                                {
+                                    // Return success and new version value
+                                    ProcessResult::RawCompareAndSwapRes {
+                                        previous_value: Some(encode_u64(&new_version_64)),
+                                        succeed: true,
+                                    },
+
+                                    raw_ext.into_iter().map(|r| r.key_guard).collect(),
+                                }
+                            } else {
+                                {
+                                    // CAS failed, just return false and current version
+                                    ProcessResult::RawCompareAndSwapRes {
+                                        previous_value: old_version,
+                                        succeed: false,
+                                    },
+                                    vec![],
+                                }
+                            }
+                        }
+
+                        None => {
+                            info!("Use set version is null");
+                            // User not set previous version, just return false and current version
+                            ProcessResult::RawCompareAndSwapRes {
+                                previous_value: old_version,
+                                succeed: false,
+                            }
+                        }
+                    }
                 }
-            );
 
-            if let Some(ref raw_ext) = raw_ext {
-                key = key.append_ts(raw_ext.ts);
+                None => {
+                    // Can not find old version
+                    info!("Old version is null");
+
+                    match previous_version {
+                        Some(ref _pv) => {
+                            // User set previous version, just return false
+                            info!("Use set version is not null");
+                            {
+                                ProcessResult::RawCompareAndSwapRes {
+                                    previous_value: old_version,
+                                    succeed: false,
+                                }, 
+                                vec![],
+                            }
+                        }
+
+                        None => {
+                            info!("Use set version is null");
+                            // Version key does not exist
+                            // Has not previous version
+                            let new_version_u64 = 0;
+                            // CAS success, update value and version
+                            // Generate new value
+                            let raw_value = RawValue {
+                                user_value: value,
+                                expire_ts: ttl_to_expire_ts(self.ttl),
+                                is_delete: false,
+                            };
+
+                            let encoded_raw_value = match_template_api_version!(
+                                API,
+                                match self.api_version {
+                                    ApiVersion::API => API::encode_raw_value_owned(raw_value),
+                                }
+                            );
+
+                            if let Some(ref raw_ext) = raw_ext {
+                                key = key.append_ts(raw_ext.ts);
+                            }
+
+                            let m = Modify::Put(cf, key, encoded_raw_value);
+                            data.push(m);
+
+                            // Generate new version
+                            let raw_version_value = RawValue {
+                                user_value: encode_u64(&new_version_u64),
+                                expire_ts: ttl_to_expire_ts(self.ttl),
+                                is_delete: false,
+                            };
+
+                            let encoded_raw_version_value = match_template_api_version!(
+                                API,
+                                match self.api_version {
+                                    ApiVersion::API => API::encode_raw_value_owned(raw_version_value),
+                                }
+                            );
+
+                            if let Some(ref raw_ext) = raw_ext {
+                                version_key = version_key.append_ts(raw_ext.ts);
+                            }
+                            let m_version = Modify::Put(cf, version_key, encoded_raw_version_value);
+                            data.push(m_version);
+
+                            // Return current version
+                            {
+                                ProcessResult::RawCompareAndSwapRes {
+                                    previous_value: Some(encode_u64(&new_version_u64)),
+                                    succeed: true,
+                                },
+                                raw_ext.into_iter().map(|r| r.key_guard).collect(),
+                            }
+                        }
+                    }
+                }
             }
-
-            let m = Modify::Put(cf, key, encoded_raw_value);
-            data.push(m);
-            (
-                ProcessResult::RawCompareAndSwapRes {
-                    previous_value: old_value,
-                    succeed: true,
-                },
-                raw_ext.into_iter().map(|r| r.key_guard).collect(),
-            )
         } else {
-            (
-                ProcessResult::RawCompareAndSwapRes {
-                    previous_value: old_value,
-                    succeed: false,
-                },
-                vec![],
-            )
-        };
+            let (pr, lock_guards) = if old_value == previous_value {
+                let raw_value = RawValue {
+                    user_value: value,
+                    expire_ts: ttl_to_expire_ts(self.ttl),
+                    is_delete: false,
+                };
+                let encoded_raw_value = match_template_api_version!(
+                    API,
+                    match self.api_version {
+                        ApiVersion::API => API::encode_raw_value_owned(raw_value),
+                    }
+                );
+    
+                if let Some(ref raw_ext) = raw_ext {
+                    key = key.append_ts(raw_ext.ts);
+                }
+    
+                let m = Modify::Put(cf, key, encoded_raw_value);
+                data.push(m);
+                (
+                    ProcessResult::RawCompareAndSwapRes {
+                        previous_value: old_value,
+                        succeed: true,
+                    },
+                    raw_ext.into_iter().map(|r| r.key_guard).collect(),
+                )
+            } else {
+                (
+                    ProcessResult::RawCompareAndSwapRes {
+                        previous_value: old_value,
+                        succeed: false,
+                    },
+                    vec![],
+                )
+            };
+        }
+
         fail_point!("txn_commands_compare_and_swap");
         let rows = data.len();
         let mut to_be_write = WriteData::from_modifies(data);

@@ -200,6 +200,7 @@ where
             proxy,
             cfg.value().reject_messages_on_memory_ratio,
             resource_manager,
+            true,
         );
         let builder_factory = Box::new(BuilderFactory::new(
             kv_service,

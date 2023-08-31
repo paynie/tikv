@@ -223,6 +223,8 @@ procinfo = { git = "https://github.com/tikv/procinfo-rs", rev = "6599eb9dca74229
 # After the PR to kvproto is merged, remember to comment this out and run `cargo update -p kvproto`.
 # [patch.'https://github.com/pingcap/kvproto']
 # kvproto = { git = "https://github.com/your_github_id/kvproto", branch = "your_branch" }
+[patch.'https://github.com/pingcap/kvproto']
+kvproto = {git = "https://github.com/paynie/kvproto", branch="easygraph3-kvproto-v6.1.0"}
 
 [workspace]
 # See https://github.com/rust-lang/rfcs/blob/master/text/2957-cargo-features2.md
@@ -277,6 +279,7 @@ members = [
   "components/test_backup",
   "components/test_coprocessor",
   "components/test_coprocessor_plugin/example_plugin",
+  "components/test_coprocessor_plugin/graph_meta",
   "components/test_pd",
   "components/test_pd_client",
   "components/test_raftstore",

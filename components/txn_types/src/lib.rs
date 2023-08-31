@@ -19,7 +19,7 @@ pub use lock::{Lock, LockType, PessimisticLock};
 use thiserror::Error;
 pub use timestamp::{TimeStamp, TsSet, TSO_PHYSICAL_SHIFT_BITS};
 pub use types::{
-    insert_old_value_if_resolved, is_short_value, Key, KvPair, Mutation, MutationType, OldValue,
+    insert_old_value_if_resolved, is_short_value, Key, KvPair, KvWithOp, Mutation, MutationType, OldValue,
     OldValues, TxnExtra, TxnExtraScheduler, Value, WriteBatchFlags, SHORT_VALUE_MAX_LEN,
 };
 pub use write::{Write, WriteRef, WriteType};

@@ -14,6 +14,7 @@ use tikv_util::{
         number::{self, NumberEncoder},
     },
 };
+use kvproto::kvrpcpb::Op;
 
 use super::timestamp::TimeStamp;
 
@@ -33,6 +34,12 @@ pub type Value = Vec<u8>;
 /// The value is simply raw bytes; the key is a little bit tricky, which is
 /// encoded bytes.
 pub type KvPair = (Vec<u8>, Value);
+
+/// Key-value with op type.
+///
+/// The value is simply raw bytes; the key is a little bit tricky, which is
+/// encoded bytes.
+pub type KvWithOp = (Vec<u8>, Value, Op);
 
 /// Key type.
 ///
@@ -118,6 +125,21 @@ impl Key {
         self.0.encode_u64_desc(ts.into_inner()).unwrap();
         self
     }
+
+    /// Creates a new key by appending a `u64` timestamp to this key.
+    #[inline]
+    pub fn append_zero(mut self) -> Key {
+        self.0.encode_i32_le(0).unwrap();
+        self
+    }
+
+    /// Creates a new key by appending a `u64` timestamp to this key.
+    #[inline]
+    pub fn get_version_key(&self) -> Key {
+        let version_key = self.clone();
+        version_key.append_zero()
+    }
+
 
     /// Appending a `u64` timestamp to input key.
     #[inline]

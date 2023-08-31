@@ -82,6 +82,32 @@ pub trait KvFormat: Keyspace + Clone + Copy + 'static + Send + Sync {
         ts: Option<TimeStamp>,
     ) -> Result<Key>;
 
+    fn decode_u64(value: &Vec<u8>) -> u64 {
+        let mut ret:u64 = 0;
+        ret += value[0] as u64;
+        ret += (value[1] as u64) << 8;
+        ret += (value[2] as u64) << 16;
+        ret += (value[3] as u64) << 24;
+        ret += (value[4] as u64) << 32;
+        ret += (value[5] as u64) << 40;
+        ret += (value[6] as u64) << 48;
+        ret += (value[7] as u64) << 56;
+        return ret;
+    }
+
+    fn encode_u64(value: &u64) -> Vec<u8> {
+        let mut ret: Vec<u8> = Vec::with_capacity(8);
+        ret.push((value & 0xff) as u8);
+        ret.push(((value >> 8) & 0xff) as u8);
+        ret.push(((value >> 16) & 0xff) as u8);
+        ret.push(((value >> 24) & 0xff) as u8);
+        ret.push(((value >> 32) & 0xff) as u8);
+        ret.push(((value >> 40) & 0xff) as u8);
+        ret.push(((value >> 48) & 0xff) as u8);
+        ret.push(((value >> 56) & 0xff) as u8);
+        ret
+    }
+
     // Convert the user key range from src_api version to Self::TAG version
     fn convert_raw_user_key_range_version_from(
         src_api: ApiVersion,
