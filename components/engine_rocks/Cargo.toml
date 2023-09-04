@@ -58,7 +58,7 @@ txn_types = { workspace = true }
 
 [dependencies.rocksdb]
 git = "https://github.com/paynie/rust-rocksdb"
-branch = "easygraph3-rust-rocksdb-tikv-7.1"
+branch = "easygraph3.0-release-7.1"
 package = "rocksdb"
 features = ["encryption"]
 
