@@ -168,7 +168,7 @@ impl<S: Snapshot, L: LockManager> WriteCommand<S, L> for RawCompareAndSwap {
 
                                 let m_version = Modify::Put(cf, version_key, encoded_raw_version_value);
                                 data.push(m_version);
-                                {
+                                (
                                     // Return success and new version value
                                     ProcessResult::RawCompareAndSwapRes {
                                         previous_value: Some(encode_u64(&new_version_64)),
@@ -176,16 +176,16 @@ impl<S: Snapshot, L: LockManager> WriteCommand<S, L> for RawCompareAndSwap {
                                     },
 
                                     raw_ext.into_iter().map(|r| r.key_guard).collect(),
-                                }
+                                )
                             } else {
-                                {
+                                (
                                     // CAS failed, just return false and current version
                                     ProcessResult::RawCompareAndSwapRes {
                                         previous_value: old_version,
                                         succeed: false,
                                     },
                                     vec![],
-                                }
+                                )
                             }
                         }
 
@@ -208,13 +208,13 @@ impl<S: Snapshot, L: LockManager> WriteCommand<S, L> for RawCompareAndSwap {
                         Some(ref _pv) => {
                             // User set previous version, just return false
                             info!("Use set version is not null");
-                            {
+                            (
                                 ProcessResult::RawCompareAndSwapRes {
                                     previous_value: old_version,
                                     succeed: false,
                                 }, 
                                 vec![],
-                            }
+                            )
                         }
 
                         None => {
@@ -265,13 +265,13 @@ impl<S: Snapshot, L: LockManager> WriteCommand<S, L> for RawCompareAndSwap {
                             data.push(m_version);
 
                             // Return current version
-                            {
+                            (
                                 ProcessResult::RawCompareAndSwapRes {
                                     previous_value: Some(encode_u64(&new_version_u64)),
                                     succeed: true,
                                 },
                                 raw_ext.into_iter().map(|r| r.key_guard).collect(),
-                            }
+                            )
                         }
                     }
                 }
