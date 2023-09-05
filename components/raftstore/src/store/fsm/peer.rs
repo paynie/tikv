@@ -5745,21 +5745,13 @@ where
 
         self.fsm.skip_split_count = 0;
 
-        let task = if self.ctx.cfg.region_split_enable {
-            SplitCheckTask::split_check(
-                self.region().clone(),
-                true,
-                CheckPolicy::Scan,
-                self.gen_bucket_range_for_update(),
-            )
-        } else {
-            SplitCheckTask::cal_region_size(
-                self.region().clone(),
-                true,
-                CheckPolicy::Scan,
-                self.gen_bucket_range_for_update(),
-            )
-        };
+        let task = SplitCheckTask::split_check(
+            self.region().clone(),
+            true,
+            CheckPolicy::Scan,
+            self.gen_bucket_range_for_update(),
+            self.ctx.cfg.region_split_enable,
+        );
 
         if let Err(e) = self.ctx.split_check_scheduler.schedule(task) {
             error!(
@@ -6164,6 +6156,7 @@ where
             false,
             policy,
             split_check_bucket_ranges,
+            true,
         );
         if let Err(e) = self.ctx.split_check_scheduler.schedule(task) {
             error!(

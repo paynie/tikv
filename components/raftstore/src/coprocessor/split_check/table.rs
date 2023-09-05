@@ -347,6 +347,7 @@ mod tests {
                     true,
                     CheckPolicy::Scan,
                     None,
+                    true,
                 ));
 
                 if let Some(id) = table_id {

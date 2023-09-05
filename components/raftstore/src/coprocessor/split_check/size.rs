@@ -441,6 +441,7 @@ pub mod tests {
             true,
             CheckPolicy::Scan,
             None,
+            true,
         ));
         // size has not reached the max_size 100 yet.
         assert_matches!(rx.try_recv(), Ok(SchedTask::UpdateApproximateSize { region_id, .. }) if region_id == region.get_id());
@@ -459,6 +460,7 @@ pub mod tests {
             true,
             CheckPolicy::Scan,
             None,
+            true,
         ));
         must_split_at(&rx, &region, vec![b"0006".to_vec()]);
 
@@ -473,6 +475,7 @@ pub mod tests {
             true,
             CheckPolicy::Scan,
             None,
+            true,
         ));
         must_split_at(&rx, &region, vec![b"0006".to_vec(), b"0012".to_vec()]);
 
@@ -488,6 +491,7 @@ pub mod tests {
             true,
             CheckPolicy::Scan,
             None,
+            true,
         ));
         must_split_at(
             &rx,
@@ -508,6 +512,7 @@ pub mod tests {
             true,
             CheckPolicy::Scan,
             None,
+            true,
         ));
     }
 
@@ -580,6 +585,7 @@ pub mod tests {
             true,
             CheckPolicy::Approximate,
             None,
+            true,
         ));
 
         let host = cop_host.new_split_checker_host(&region, &engine, true, CheckPolicy::Scan);
@@ -611,6 +617,7 @@ pub mod tests {
             true,
             CheckPolicy::Approximate,
             Some(vec![BucketRange(start.clone(), end.clone())]),
+            true,
         ));
         let host = cop_host.new_split_checker_host(&region, &engine, true, CheckPolicy::Scan);
         assert_eq!(host.policy(), CheckPolicy::Approximate);
@@ -763,6 +770,7 @@ pub mod tests {
                 true,
                 *policy,
                 None,
+                true,
             ));
             // Ignore the split keys. Only check whether it can split or not.
             must_split_at_impl(&rx, &region, vec![], true);
@@ -798,6 +806,7 @@ pub mod tests {
                 true,
                 *policy,
                 None,
+                true,
             ));
             // Ignore the split keys. Only check whether it can split or not.
             must_split_at_impl(&rx, &region, vec![], true);

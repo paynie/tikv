@@ -221,6 +221,7 @@ impl<EK: KvEngine, ER: RaftEngine> Peer<EK, ER> {
             true,
             CheckPolicy::Scan,
             self.gen_bucket_range_for_update(ctx),
+            self.ctx.cfg.region_split_enable,
         );
         if let Err(e) = ctx.schedulers.split_check.schedule(task) {
             info!(self.logger, "failed to schedule split check"; "err" => ?e);
@@ -345,6 +346,7 @@ impl<EK: KvEngine, ER: RaftEngine> Peer<EK, ER> {
             false,
             rhs.policy,
             split_check_bucket_ranges,
+            true,
         );
         if let Err(e) = ctx.schedulers.split_check.schedule(task) {
             error!(
