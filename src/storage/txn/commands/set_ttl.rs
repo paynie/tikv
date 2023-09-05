@@ -32,7 +32,7 @@ command! {
             key: Key,
             ttl: u64,
             api_version: ApiVersion,
-            enable_write_with_version: bool，
+            enable_write_with_version: bool,
         }
 }
 

@@ -275,7 +275,7 @@ impl<S: Snapshot, L: LockManager> WriteCommand<S, L> for RawCompareAndSwap {
                         }
                     }
                 }
-            }
+            };
         } else {
             let (pr, lock_guards) = if old_value == previous_value {
                 let raw_value = RawValue {
