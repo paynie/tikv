@@ -30,7 +30,7 @@ command! {
     /// The previous value is always returned regardless of whether the new value is set.
     RawWriteWithOpVersion:
         cmd_ty => (),
-        display => "kv::command::raw_batch_put {:?}", (ctx),
+        display => "kv::command::raw_batch_write {:?}", (ctx),
         content => {
             cf: CfName,
             write_ops: Vec<(Key, Value, Op)>,

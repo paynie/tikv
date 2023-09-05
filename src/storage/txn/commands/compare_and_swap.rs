@@ -98,7 +98,7 @@ impl<S: Snapshot, L: LockManager> WriteCommand<S, L> for RawCompareAndSwap {
 
         if self.enable_write_with_version {
             // Generate version key
-            let version_key = key.get_version_key();
+            let mut version_key = key.get_version_key();
             let previous_version = self.previous_value;
 
             // Get old version
@@ -192,10 +192,13 @@ impl<S: Snapshot, L: LockManager> WriteCommand<S, L> for RawCompareAndSwap {
                         None => {
                             info!("Use set version is null");
                             // User not set previous version, just return false and current version
-                            ProcessResult::RawCompareAndSwapRes {
-                                previous_value: old_version,
-                                succeed: false,
-                            }
+                            (
+                                ProcessResult::RawCompareAndSwapRes {
+                                    previous_value: old_version,
+                                    succeed: false,
+                                },
+                                vec![],
+                            )
                         }
                     }
                 }

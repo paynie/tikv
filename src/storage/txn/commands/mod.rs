@@ -116,6 +116,7 @@ pub enum Command {
     FlashbackToVersion(FlashbackToVersion),
     RawSetKeyTTL(RawSetKeyTTL),
     RawWriteWithVersion(RawWriteWithVersion),
+    RawWriteWithOpVersion(RawWriteWithOpVersion),
 }
 
 /// A `Command` with its return type, reified as the generic parameter `T`.
