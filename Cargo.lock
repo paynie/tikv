@@ -2808,7 +2808,7 @@ dependencies = [
 [[package]]
 name = "kvproto"
 version = "0.0.2"
-source = "git+https://github.com/paynie/kvproto?branch=easygraph3-kvproto-v6.1.0#3b524422182a4572a9654239d118a23ffbcea174"
+source = "git+https://github.com/paynie/kvproto?branch=release-7.1#37c54a91447dc99d883873d6e2459e3435443ef8"
 dependencies = [
  "futures 0.3.15",
  "grpcio",
@@ -2937,7 +2937,7 @@ dependencies = [
 [[package]]
 name = "librocksdb_sys"
 version = "0.1.0"
-source = "git+https://github.com/paynie/rust-rocksdb?branch=easygraph3-rust-rocksdb-tikv-6.1#0676a7c558202c3ffa9255045ca831160e031700"
+source = "git+https://github.com/paynie/rust-rocksdb?branch=easygraph3.0-release-7.1#4f1f60142249dc1189b9f14624461b6319b0ef24"
 dependencies = [
  "bindgen 0.57.0",
  "bzip2-sys",
@@ -2956,7 +2956,7 @@ dependencies = [
 [[package]]
 name = "libtitan_sys"
 version = "0.0.1"
-source = "git+https://github.com/paynie/rust-rocksdb?branch=easygraph3-rust-rocksdb-tikv-6.1#0676a7c558202c3ffa9255045ca831160e031700"
+source = "git+https://github.com/paynie/rust-rocksdb?branch=easygraph3.0-release-7.1#4f1f60142249dc1189b9f14624461b6319b0ef24"
 dependencies = [
  "bzip2-sys",
  "cc",
@@ -4905,7 +4905,7 @@ dependencies = [
 [[package]]
 name = "rocksdb"
 version = "0.3.0"
-source = "git+https://github.com/paynie/rust-rocksdb?branch=easygraph3-rust-rocksdb-tikv-6.1#0676a7c558202c3ffa9255045ca831160e031700"
+source = "git+https://github.com/paynie/rust-rocksdb?branch=easygraph3.0-release-7.1#4f1f60142249dc1189b9f14624461b6319b0ef24"
 dependencies = [
  "libc 0.2.139",
  "librocksdb_sys",
