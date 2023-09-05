@@ -81,11 +81,10 @@ fn encode_u64(value: &u64) -> Vec<u8> {
 impl<S: Snapshot, L: LockManager> WriteCommand<S, L> for RawCompareAndSwap {
     fn process_write(self, snapshot: S, wctx: WriteContext<'_, L>) -> Result<WriteResult> {
 
-        let (cf, mut key, value, previous_value, ctx, raw_ext) = (
+        let (cf, mut key, value,  ctx, raw_ext) = (
             self.cf,
             self.key,
             self.value,
-            self.previous_value,
             self.ctx,
             wctx.raw_ext,
         );
@@ -100,6 +99,7 @@ impl<S: Snapshot, L: LockManager> WriteCommand<S, L> for RawCompareAndSwap {
         if self.enable_write_with_version {
             // Generate version key
             let version_key = key.get_version_key();
+            let previous_version = self.previous_value;
 
             // Get old version
             let old_version = RawStore::new(snapshot, self.api_version).raw_get_key_value(
@@ -276,7 +276,24 @@ impl<S: Snapshot, L: LockManager> WriteCommand<S, L> for RawCompareAndSwap {
                     }
                 }
             };
+
+            fail_point!("txn_commands_compare_and_swap");
+            let rows = data.len();
+            let mut to_be_write = WriteData::from_modifies(data);
+            to_be_write.set_allowed_on_disk_almost_full();
+            Ok(WriteResult {
+                ctx,
+                to_be_write,
+                rows,
+                pr,
+                lock_info: vec![],
+                released_locks: ReleasedLocks::new(),
+                new_acquired_locks: vec![],
+                lock_guards,
+                response_policy: ResponsePolicy::OnApplied,
+            })
         } else {
+            let previous_value = self.previous_value;
             let (pr, lock_guards) = if old_value == previous_value {
                 let raw_value = RawValue {
                     user_value: value,
@@ -312,23 +329,23 @@ impl<S: Snapshot, L: LockManager> WriteCommand<S, L> for RawCompareAndSwap {
                     vec![],
                 )
             };
-        }
 
-        fail_point!("txn_commands_compare_and_swap");
-        let rows = data.len();
-        let mut to_be_write = WriteData::from_modifies(data);
-        to_be_write.set_allowed_on_disk_almost_full();
-        Ok(WriteResult {
-            ctx,
-            to_be_write,
-            rows,
-            pr,
-            lock_info: vec![],
-            released_locks: ReleasedLocks::new(),
-            new_acquired_locks: vec![],
-            lock_guards,
-            response_policy: ResponsePolicy::OnApplied,
-        })
+            fail_point!("txn_commands_compare_and_swap");
+            let rows = data.len();
+            let mut to_be_write = WriteData::from_modifies(data);
+            to_be_write.set_allowed_on_disk_almost_full();
+            Ok(WriteResult {
+                ctx,
+                to_be_write,
+                rows,
+                pr,
+                lock_info: vec![],
+                released_locks: ReleasedLocks::new(),
+                new_acquired_locks: vec![],
+                lock_guards,
+                response_policy: ResponsePolicy::OnApplied,
+            })
+        }
     }
 }
 

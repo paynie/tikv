@@ -8,11 +8,10 @@ use txn_types::{Key, Value};
 use crate::storage::{
     kv::{Modify, WriteData},
     lock_manager::LockManager,
-    raw,
     txn::{
         commands::{
-            Command, CommandExt, ResponsePolicy, TypedCommand, WriteCommand, WriteContext,
-            WriteResult,
+            Command, CommandExt, ReleasedLocks, ResponsePolicy, TypedCommand, WriteCommand,
+            WriteContext, WriteResult,
         },
         Result,
     },
@@ -48,8 +47,8 @@ impl CommandExt for RawSetKeyTTL {
 }
 
 
-impl<S: Snapshot, L: LockManager> WriteCommand<S, L> for RawAtomicStore {
-    fn process_write(self, _: S, wctx: WriteContext<'_, L>) -> Result<WriteResult> {
+impl<S: Snapshot, L: LockManager> WriteCommand<S, L> for RawSetKeyTTL {
+    fn process_write(self, snapshot: S, wctx: WriteContext<'_, L>) -> Result<WriteResult> {
 
         let (cf, key, ttl, ctx, raw_ext, enable_write_with_version) = (self.cf, self.key, self.ttl, self.ctx, wctx.raw_ext, self.enable_write_with_version);
 

@@ -11,7 +11,7 @@ use crate::storage::{
     raw,
     txn::{
         commands::{
-            Command, CommandExt, ResponsePolicy, TypedCommand, WriteCommand, WriteContext,
+            Command, CommandExt, ReleasedLocks, ResponsePolicy, TypedCommand, WriteCommand, WriteContext,
             WriteResult,
         },
         Result,
@@ -79,7 +79,7 @@ fn encode_u64(value: &u64) -> Vec<u8> {
 }
 
 impl<S: Snapshot, L: LockManager> WriteCommand<S, L> for RawWriteWithVersion {
-    fn process_write(self, _: S, wctx: WriteContext<'_, L>) -> Result<WriteResult> {
+    fn process_write(self, snapshot: S, wctx: WriteContext<'_, L>) -> Result<WriteResult> {
         let (cf, kvs, ttls, ctx, api_version, raw_ext) = (self.cf, self.kvs, self.ttls, self.ctx, self.api_version, wctx.raw_ext);
         let mut data = vec![];
 
