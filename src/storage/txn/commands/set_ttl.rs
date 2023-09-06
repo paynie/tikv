@@ -50,7 +50,7 @@ impl CommandExt for RawSetKeyTTL {
 impl<S: Snapshot, L: LockManager> WriteCommand<S, L> for RawSetKeyTTL {
     fn process_write(self, snapshot: S, wctx: WriteContext<'_, L>) -> Result<WriteResult> {
 
-        let (cf, key, ttl, ctx, raw_ext, enable_write_with_version) = (self.cf, self.key, self.ttl, self.ctx, wctx.raw_ext, self.enable_write_with_version);
+        let (cf, mut key, ttl, ctx, raw_ext, enable_write_with_version) = (self.cf, self.key, self.ttl, self.ctx, wctx.raw_ext, self.enable_write_with_version);
 
         let mut data = vec![];
 
@@ -65,7 +65,7 @@ impl<S: Snapshot, L: LockManager> WriteCommand<S, L> for RawSetKeyTTL {
 
         if enable_write_with_version {
             // Generate version key
-            let version_key = key.get_version_key();
+            let mut version_key = key.get_version_key();
 
             // Get old version
             let old_version_value = store.raw_get_key_value(
