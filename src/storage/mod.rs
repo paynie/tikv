@@ -2886,6 +2886,33 @@ impl<E: Engine, L: LockManager, F: KvFormat> Storage<E, L, F> {
             .get_resource_control_context()
             .get_resource_group_name()
             .to_owned();
+
+        if enable_write_with_version {
+            self.sched_raw_command(&group_name, priority, CMD, async move {
+                let kvs = pairs.into_iter().map(|(k, v)| {
+                    (F::encode_raw_key_owned(k, None), v)
+                }).collect();
+                let cmd = RawWriteWithVersion::new(cf, kvs, ttls, self.api_version, ctx);
+
+                Self::sched_raw_atomic_command(
+                    sched,
+                    cmd,
+                    Box::new(|res| callback(res.map_err(Error::from))),
+                );
+            })
+        } else {
+            self.sched_raw_command(&group_name, priority, CMD, async move {
+                let modifies = Self::raw_batch_put_requests_to_modifies(cf, pairs, ttls, None);
+                let cmd = RawAtomicStore::new(cf, modifies, ctx);
+                Self::sched_raw_atomic_command(
+                    sched,
+                    cmd,
+                    Box::new(|res| callback(res.map_err(Error::from))),
+                );
+            })
+        }
+
+        /*
         self.sched_raw_command(&group_name, priority, CMD, async move {
             //let cmd = if enable_write_with_version {
                 // Transform KvPair to (Key, Value)
@@ -2906,6 +2933,7 @@ impl<E: Engine, L: LockManager, F: KvFormat> Storage<E, L, F> {
                 Box::new(|res| callback(res.map_err(Error::from))),
             );
         })
+         */
     }
 
     pub fn raw_batch_write_atomic(
@@ -2934,6 +2962,32 @@ impl<E: Engine, L: LockManager, F: KvFormat> Storage<E, L, F> {
             .get_resource_control_context()
             .get_resource_group_name()
             .to_owned();
+
+        if enable_write_with_version {
+            self.sched_raw_command(&group_name, priority, CMD, async move {
+                    let kv_ops = write_ops.into_iter().map(|(k, v, op)| {
+                        (F::encode_raw_key_owned(k, None), v, op)
+                }).collect();
+                let cmd = RawWriteWithOpVersion::new(cf, kv_ops, ttls, self.api_version, ctx);
+                Self::sched_raw_atomic_command(
+                    sched,
+                    cmd,
+                    Box::new(|res| callback(res.map_err(Error::from))),
+                );
+            })
+        } else {
+            self.sched_raw_command(&group_name, priority, CMD, async move {
+                let modifies = Self::raw_batch_write_requests_to_modifies(cf, write_ops, ttls, None);
+                let cmd = RawAtomicStore::new(cf, modifies, ctx);
+                Self::sched_raw_atomic_command(
+                    sched,
+                    cmd,
+                    Box::new(|res| callback(res.map_err(Error::from))),
+                );
+            })
+        }
+
+        /*
         self.sched_raw_command(&group_name, priority, CMD, async move {
             //let cmd = if enable_write_with_version {
                 // Transform KvPair to (Key, Value)
@@ -2954,6 +3008,7 @@ impl<E: Engine, L: LockManager, F: KvFormat> Storage<E, L, F> {
                 Box::new(|res| callback(res.map_err(Error::from))),
             );
         })
+         */
     }
 
     pub fn raw_batch_set_ttl_atomic(
