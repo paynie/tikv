@@ -96,10 +96,10 @@ impl<S: Snapshot, L: LockManager> WriteCommand<S, L> for RawWriteWithOpVersion {
 
         let store = RawStore::new(snapshot, self.api_version);
 
-        write_ops.into_iter().zip(ttls).for_each(|((key, value, op), ttl)| {
+        write_ops.into_iter().zip(ttls).for_each(|((mut key, value, op), ttl)| {
 
             // Generate version key
-            let version_key = key.get_version_key();
+            let mut version_key = key.get_version_key();
             if op == Del {
                 let m = Modify::Delete(
                     cf,
