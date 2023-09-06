@@ -90,7 +90,9 @@ impl<S: Snapshot, L: LockManager> WriteCommand<S, L> for RawCompareAndSwap {
         );
 
         let mut data = vec![];
-        let old_value = RawStore::new(snapshot, self.api_version).raw_get_key_value(
+        let store = RawStore::new(snapshot, self.api_version);
+
+        let old_value = store.raw_get_key_value(
             cf,
             &key,
             &mut Statistics::default(),
@@ -102,7 +104,7 @@ impl<S: Snapshot, L: LockManager> WriteCommand<S, L> for RawCompareAndSwap {
             let previous_version = self.previous_value;
 
             // Get old version
-            let old_version = RawStore::new(snapshot, self.api_version).raw_get_key_value(
+            let old_version = store.raw_get_key_value(
                 cf,
                 &version_key,
                 &mut Statistics::default(),
