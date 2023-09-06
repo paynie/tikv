@@ -2892,8 +2892,9 @@ impl<E: Engine, L: LockManager, F: KvFormat> Storage<E, L, F> {
                 let kvs = pairs.into_iter().map(|(k, v)| {
                     (F::encode_raw_key_owned(k, None), v)
                 }).collect();
-                let cmd = RawWriteWithVersion::new(cf, kvs, ttls, self.api_version, ctx);
+                //let cmd = RawWriteWithVersion::new(cf, kvs, ttls, self.api_version, ctx);
 
+                let cmd = RawAtomicStore::new(cf, modifies, ctx);
                 Self::sched_raw_atomic_command(
                     sched,
                     cmd,
