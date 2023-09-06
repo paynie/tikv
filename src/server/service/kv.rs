@@ -1807,7 +1807,7 @@ fn future_raw_batch_write<E: Engine, L: LockManager, F: KvFormat>(
         req.take_ttls()
     };
     let write_ops = req
-        .get_batch()
+        .take_batch()
         .into_iter()
         .map(|mut x| (x.take_key(), x.take_value(), x.get_op()))
         .collect();
