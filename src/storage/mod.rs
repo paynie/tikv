@@ -2870,14 +2870,9 @@ impl<E: Engine, L: LockManager, F: KvFormat> Storage<E, L, F> {
         enable_write_with_version: bool,
     ) -> Result<()> {
         const CMD: CommandKind = CommandKind::raw_atomic_store;
-        Self::check_api_version(
-            self.api_version,
-            ctx.api_version,
-            CMD,
-            pairs.iter().map(|(ref k, _)| k),
-        )?;
-
-        let cf = Self::rawkv_cf(&cf, self.api_version)?;
+        let api_version = self.api_version;
+        Self::check_api_version(api_version,ctx.api_version,CMD,pairs.iter().map(|(ref k, _)| k),)?;
+        let cf = Self::rawkv_cf(&cf, api_version)?;
         Self::check_ttl_valid(pairs.len(), &ttls)?;
 
         let sched = self.get_scheduler();
@@ -2892,9 +2887,9 @@ impl<E: Engine, L: LockManager, F: KvFormat> Storage<E, L, F> {
                 let kvs = pairs.into_iter().map(|(k, v)| {
                     (F::encode_raw_key_owned(k, None), v)
                 }).collect();
-                //let cmd = RawWriteWithVersion::new(cf, kvs, ttls, self.api_version, ctx);
+                let cmd = RawWriteWithVersion::new(cf, kvs, ttls, api_version, ctx);
 
-                let cmd = RawAtomicStore::new(cf, modifies, ctx);
+                //let cmd = RawAtomicStore::new(cf, modifies, ctx);
                 Self::sched_raw_atomic_command(
                     sched,
                     cmd,
@@ -2947,14 +2942,15 @@ impl<E: Engine, L: LockManager, F: KvFormat> Storage<E, L, F> {
         enable_write_with_version: bool,
     ) -> Result<()> {
         const CMD: CommandKind = CommandKind::raw_atomic_store;
+        let api_version = self.api_version;
         Self::check_api_version(
-            self.api_version,
+            api_version,
             ctx.api_version,
             CMD,
             write_ops.iter().map(|(ref k, _, _)| k),
         )?;
 
-        let cf = Self::rawkv_cf(&cf, self.api_version)?;
+        let cf = Self::rawkv_cf(&cf, api_version)?;
         Self::check_ttl_valid(write_ops.len(), &ttls)?;
 
         let sched = self.get_scheduler();
@@ -2966,10 +2962,10 @@ impl<E: Engine, L: LockManager, F: KvFormat> Storage<E, L, F> {
 
         if enable_write_with_version {
             self.sched_raw_command(&group_name, priority, CMD, async move {
-                    let kv_ops = write_ops.into_iter().map(|(k, v, op)| {
+                let kv_ops = write_ops.into_iter().map(|(k, v, op)| {
                         (F::encode_raw_key_owned(k, None), v, op)
                 }).collect();
-                let cmd = RawWriteWithOpVersion::new(cf, kv_ops, ttls, self.api_version, ctx);
+                let cmd = RawWriteWithOpVersion::new(cf, kv_ops, ttls, api_version, ctx);
                 Self::sched_raw_atomic_command(
                     sched,
                     cmd,
@@ -3023,14 +3019,15 @@ impl<E: Engine, L: LockManager, F: KvFormat> Storage<E, L, F> {
     ) -> Result<()> {
         const CMD: CommandKind = CommandKind::raw_set_key_ttl;
         let keys = vec![&key];
+        let api_version = self.api_version;
         Self::check_api_version(
-            self.api_version,
+            api_version,
             ctx.api_version,
             CMD,
             &keys,
         )?;
 
-        let cf = Self::rawkv_cf(&cf, self.api_version)?;
+        let cf = Self::rawkv_cf(&cf, api_version)?;
 
         let sched = self.get_scheduler();
         let priority = ctx.get_priority();
@@ -3040,7 +3037,7 @@ impl<E: Engine, L: LockManager, F: KvFormat> Storage<E, L, F> {
             .to_owned();
 
         self.sched_raw_command(&group_name, priority, CMD, async move {
-            let cmd = RawSetKeyTTL::new(cf, Key::from_encoded(key), ttl, self.api_version, enable_write_with_version, ctx);
+            let cmd = RawSetKeyTTL::new(cf, Key::from_encoded(key), ttl, api_version, enable_write_with_version, ctx);
             Self::sched_raw_atomic_command(
                 sched,
                 cmd,
