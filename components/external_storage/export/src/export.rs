@@ -30,9 +30,9 @@ pub use kvproto::brpb::StorageBackend_oneof_backend as Backend;
 #[cfg(any(feature = "cloud-gcp", feature = "cloud-aws", feature = "cloud-azure"))]
 use kvproto::brpb::{AzureBlobStorage, Gcs, S3};
 use kvproto::brpb::{CloudDynamic, Noop, StorageBackend};
+use kvproto::brpb::StorageBackend_oneof_backend::Hdfs;
+pub use external_storage::HdfsConfig;
 use tikv_util::time::{Instant, Limiter};
-#[cfg(feature = "cloud-storage-dylib")]
-use tikv_util::warn;
 
 #[cfg(feature = "cloud-storage-dylib")]
 use crate::dylib;
@@ -41,6 +41,16 @@ pub fn create_storage(
     storage_backend: &StorageBackend,
     config: BackendConfig,
 ) -> io::Result<Box<dyn ExternalStorage>> {
+    // Just for hdfs
+    match &storage_backend.backend.as_ref().unwrap() {
+        Hdfs(hdfs) => {
+            // HDFS
+            return Ok(Box::new(HdfsStorage::new(&hdfs.remote, config.hdfs_config)?));
+        },
+
+        _ => {},
+    }
+
     if let Some(backend) = &storage_backend.backend {
         create_backend(backend, config)
     } else {

@@ -783,6 +783,7 @@ fn test_serde_custom_tikv_config() {
         s3_multi_part_size: ReadableSize::mb(15),
         hadoop: HadoopConfig {
             home: "/root/hadoop".to_string(),
+            local_tmp_path: "/var".to_owned(),
             linux_user: "hadoop".to_string(),
         },
         ..Default::default()

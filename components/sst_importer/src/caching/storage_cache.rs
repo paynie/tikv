@@ -2,7 +2,7 @@
 
 use std::sync::Arc;
 
-use external_storage_export::ExternalStorage;
+use external_storage_export::{BackendConfig, ExternalStorage};
 use kvproto::brpb::StorageBackend;
 
 use super::cache_map::{MakeCache, ShareOwned};
@@ -23,6 +23,10 @@ impl MakeCache for StorageBackend {
     fn make_cache(&self) -> Result<Self::Cached> {
         StoragePool::create(self, 16)
     }
+
+    fn make_cache_with_config(&self, backend_config: BackendConfig) -> Result<Self::Cached> {
+        StoragePool::create_with_config(self, 16, backend_config)
+    }
 }
 
 pub struct StoragePool(Box<[Arc<dyn ExternalStorage>]>);
@@ -36,6 +40,16 @@ impl StoragePool {
         }
         Ok(Self(r.into_boxed_slice()))
     }
+
+    fn create_with_config(backend: &StorageBackend, size: usize, backend_config: BackendConfig) -> Result<Self> {
+        let mut r = Vec::with_capacity(size);
+        for _ in 0..size {
+            let s = external_storage_export::create_storage(backend, backend_config.clone())?;
+            r.push(Arc::from(s));
+        }
+        Ok(Self(r.into_boxed_slice()))
+    }
+
 
     fn get(&self) -> Arc<dyn ExternalStorage> {
         use rand::Rng;

@@ -2,7 +2,6 @@
 
 //! External storage support.
 //! Cloud provider backends can be found under components/cloud
-
 #[macro_use]
 extern crate slog_global;
 #[allow(unused_extern_crates)]
@@ -31,7 +30,7 @@ use tikv_util::{
 };
 use tokio::time::timeout;
 
-mod hdfs;
+pub mod hdfs;
 pub use hdfs::{HdfsConfig, HdfsStorage};
 pub mod local;
 pub use local::LocalStorage;
@@ -60,7 +59,7 @@ pub struct UnpinReader(pub Box<dyn AsyncRead + Unpin + Send>);
 
 pub type ExternalData<'a> = Box<dyn AsyncRead + Unpin + Send + 'a>;
 
-#[derive(Debug, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct BackendConfig {
     pub s3_multi_part_size: usize,
     pub hdfs_config: HdfsConfig,

@@ -2615,6 +2615,7 @@ mod readpool_tests {
 #[serde(rename_all = "kebab-case")]
 pub struct HadoopConfig {
     pub home: String,
+    pub local_tmp_path: String,
     pub linux_user: String,
 }
 
