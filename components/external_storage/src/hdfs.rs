@@ -44,6 +44,56 @@ pub struct HdfsStorage {
     config: HdfsConfig,
 }
 
+fn check_and_create_dir(dir: &str) -> std::io::Result<()> {
+    // Create hadoop tmp path
+    let max_retry_num = 10;
+    let mut retry_index = 0;
+    let retry_interval_ms = 100;
+
+    info!("Before create tmp dir");
+    while retry_index < max_retry_num {
+        let tmp_path = Path::new(&dir);
+        info!("Before create tmp dir"; "tmp path str" => &dir);
+        if !tmp_path.exists() || (tmp_path.exists() && !tmp_path.is_dir()) {
+            info!("tmp path is not exist");
+            if tmp_path.exists() && !tmp_path.is_dir() {
+                // Exit but not a dir, delete if first
+                std::fs::remove_file(tmp_path)?;
+            }
+
+            let create_ret = std::fs::create_dir_all(tmp_path);
+            match create_ret {
+                Ok(_) => {
+                    info!("Create tmp path success"; "tmp path" => &dir);
+                    // Chmod to 777
+                    chmod_for_dir(&dir)?;
+                    break;
+                }
+
+                Err(e) => {
+                    error!("Create tmp path failed"; "tmp path" => &dir);
+                    // retry
+                    retry_index += 1;
+                    if retry_index == max_retry_num {
+                        // Retry to max, just return error
+                        error!("Create tmp path failed after max retry time"; "max_retry_num" => max_retry_num);
+                        return Err(io::Error::new(
+                            io::ErrorKind::Other,
+                            format!("[{}] create failed", &dir),
+                        ));
+                    }
+
+                    info!("Retry next"; "retry index" => retry_index, "retry_inverval_ms" => retry_interval_ms);
+                    std::thread::sleep(Duration::from_millis(retry_interval_ms));
+                }
+            }
+        } else {
+            break;
+        }
+    }
+    Ok(())
+}
+
 fn chmod_for_dir(dir: &str) -> std::io::Result<()> {
     let mut cmd_with_args = vec![];
     cmd_with_args.extend(["chmod", "-R", "777", dir]);
@@ -60,7 +110,7 @@ fn chmod_for_dir(dir: &str) -> std::io::Result<()> {
 
     // Check hadoop client jvm return message
     if output.status.success() {
-        debug!("chmod for dir success"; "dir" => dir);
+        info!("chmod for dir success"; "dir" => dir);
         Ok(())
     } else {
         let stdout = String::from_utf8_lossy(&output.stdout);
@@ -87,52 +137,11 @@ impl HdfsStorage {
             remote.set_path(&new_path);
         }
 
-        // Create hadoop tmp path
-        let max_retry_num = 10;
-        let mut retry_index = 0;
-        let retry_interval_ms = 100;
-
-        while retry_index < max_retry_num {
-            let tmp_path_str = String::from(config.hadoop_local_tmp_path.clone());
-            let tmp_path = Path::new(&tmp_path_str);
-            if !tmp_path.exists() || !tmp_path.is_dir() {
-                if !tmp_path.is_dir() {
-                    // Not a dir, delete if first
-                    std::fs::remove_file(tmp_path)?;
-                }
-
-                let create_ret = std::fs::create_dir(tmp_path);
-                match create_ret {
-                    Ok(_) => {
-                        info!("Create tmp path success"; "tmp path" => &tmp_path_str);
-                        // Chmod to 777
-                        chmod_for_dir(&tmp_path_str)?;
-                        break;
-                    }
-
-                    Err(e) => {
-                        error!("Create tmp path failed"; "tmp path" => &tmp_path_str);
-                        // retry
-                        retry_index += 1;
-                        if retry_index == max_retry_num {
-                            // Retry to max, just return error
-                            error!("Create tmp path failed after max retry time"; "max_retry_num" => max_retry_num);
-                            return Err(io::Error::new(
-                                io::ErrorKind::Other,
-                                format!("[{}] create failed", &tmp_path_str),
-                            ));
-                        }
-
-                        info!("Retry next"; "retry index" => retry_index, "retry_inverval_ms" => retry_interval_ms);
-                        std::thread::sleep(Duration::from_millis(retry_interval_ms));
-                    }
-                }
-            } else {
-                break;
-            }
+        let check_ret = check_and_create_dir(&config.hadoop_local_tmp_path);
+        match check_ret {
+            Ok(_) => Ok(HdfsStorage { remote, config }),
+            Err(e) => Err(e)
         }
-
-        Ok(HdfsStorage { remote, config })
     }
 
     fn get_hadoop_home(&self) -> Option<String> {
