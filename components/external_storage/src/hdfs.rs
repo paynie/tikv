@@ -350,10 +350,10 @@ impl ExternalStorage for HdfsStorage {
         let output_ret = hdfs_cmd.wait_with_output().await;
         match output_ret {
             Ok(_) => {
-                info!("push local file to hdfs success"; "local file" => &local_file_path_str, "hdfs file" => path);
+                info!("Startup hdfs command success"; "local file" => &local_file_path_str, "hdfs file" => path);
             }
             Err(e) => {
-                info!("push local file to hdfs failed"; "local file" => &local_file_path_str, "hdfs file" => path);
+                info!("Startup hdfs command failed"; "local file" => &local_file_path_str, "hdfs file" => path);
                 // Remove local file
                 tokio::fs::remove_file(&local_file_path_str).await?;
                 return Err(e);
@@ -366,7 +366,7 @@ impl ExternalStorage for HdfsStorage {
         // Check hadoop client jvm return message
         let output = output_ret.unwrap();
         if output.status.success() {
-            debug!("save file to hdfs"; "path" => ?path);
+            info!("Push local file to hdfs success"; "local file" => &local_file_path_str, "hdfs file" => path);
             Ok(())
         } else {
             let stdout = String::from_utf8_lossy(&output.stdout);
