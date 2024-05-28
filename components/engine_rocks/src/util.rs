@@ -11,6 +11,7 @@ use rocksdb::{
     DB,
 };
 use slog_global::warn;
+use tikv_util::info;
 
 use crate::{
     cf_options::RocksCfOptions, db_options::RocksDbOptions, engine::RocksEngine, r2e,
@@ -41,6 +42,11 @@ pub fn new_engine_opt(
     db_opt: RocksDbOptions,
     cf_opts: Vec<(&str, RocksCfOptions)>,
 ) -> Result<RocksEngine> {
+    info!(
+        "paynie add: create new engine";
+        "path " => path,
+    );
+
     let mut db_opt = db_opt.into_raw();
     if cf_opts.iter().all(|(name, _)| *name != CF_DEFAULT) {
         return Err(engine_traits::Error::Engine(

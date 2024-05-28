@@ -1464,6 +1464,7 @@ impl<CER: ConfiguredRaftEngine> TikvServer<CER> {
         &mut self,
         flow_listener: engine_rocks::FlowListener,
     ) -> Arc<EnginesResourceInfo> {
+        info!("paynie add: init engines in server2");
         let block_cache = self.core.config.storage.block_cache.build_shared_cache();
         let env = self
             .core

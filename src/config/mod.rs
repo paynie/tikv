@@ -3755,9 +3755,9 @@ impl TikvConfig {
                     self.raft_engine.config.purge_threshold,
                 );
             }
-            if let Some(true) = self.rocksdb.titan.enabled {
-                return Err("partitioned-raft-kv doesn't support titan.".into());
-            }
+            //if let Some(true) = self.rocksdb.titan.enabled {
+            //    return Err("partitioned-raft-kv doesn't support titan.".into());
+            //}
             if self.raft_store.enable_v2_compatible_learner {
                 self.raft_store.enable_v2_compatible_learner = false;
                 warn!(
