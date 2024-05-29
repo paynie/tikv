@@ -88,8 +88,6 @@ use kvproto::{
     pdpb::QueryKind,
 };
 
-use kvproto::kvrpcpb::Op;
-use kvproto::kvrpcpb::Op::Put;
 use kvproto::kvrpcpb::Op::Del;
 
 use pd_client::FeatureGate;

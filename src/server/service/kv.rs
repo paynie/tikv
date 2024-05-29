@@ -2020,7 +2020,7 @@ fn future_raw_batch_write<E: Engine, L: LockManager, F: KvFormat>(
     let (cb, f) = paired_future_callback();
     let for_atomic = req.get_for_cas();
     let res = if for_atomic {
-        storage.raw_batch_write_atomic(req.take_context(), cf, write_ops, ttls, cb, false)
+        storage.raw_batch_write_atomic(req.take_context(), cf, write_ops, ttls, cb)
     } else {
         storage.raw_batch_write(req.take_context(), cf, write_ops, ttls, cb)
     };

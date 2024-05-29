@@ -28,7 +28,6 @@ pub(crate) mod resolve_lock_lite;
 pub(crate) mod resolve_lock_readphase;
 pub(crate) mod rollback;
 pub(crate) mod txn_heart_beat;
-mod set_ttl;
 
 use std::{
     fmt::{self, Debug, Display, Formatter},

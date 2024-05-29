@@ -1,9 +1,9 @@
 use api_version::{match_template_api_version, KvFormat, RawValue};
-use engine_traits::{raw_ttl::ttl_to_expire_ts, CfName};
+use engine_traits::{CfName, raw_ttl::ttl_to_expire_ts};
 use kvproto::kvrpcpb::ApiVersion;
 //use raw::RawStore;
 use tikv_kv::Statistics;
-use txn_types::{Key, Value};
+use txn_types::Key;
 use crate::storage::raw::RawStore;
 
 use crate::storage::{
@@ -11,7 +11,7 @@ use crate::storage::{
     lock_manager::LockManager,
     txn::{
         commands::{
-            Command, CommandExt, ReleasedLocks, ResponsePolicy, TypedCommand, WriteCommand,
+            CommandExt, ReleasedLocks, ResponsePolicy, WriteCommand,
             WriteContext, WriteResult,
         },
         Result,
@@ -50,7 +50,7 @@ impl CommandExt for RawSetKeyTTL {
 impl<S: Snapshot, L: LockManager> WriteCommand<S, L> for RawSetKeyTTL {
     fn process_write(self, snapshot: S, wctx: WriteContext<'_, L>) -> Result<WriteResult> {
 
-        let (cf, mut key, ttl, ctx, raw_ext, enable_write_with_version) = (self.cf, self.key, self.ttl, self.ctx, wctx.raw_ext, self.enable_write_with_version);
+        let (cf, mut key, ttl, ctx, raw_ext) = (self.cf, self.key, self.ttl, self.ctx, wctx.raw_ext);
 
         let mut data = vec![];
 
@@ -114,6 +114,7 @@ impl<S: Snapshot, L: LockManager> WriteCommand<S, L> for RawSetKeyTTL {
             new_acquired_locks: vec![],
             lock_guards: raw_ext.into_iter().map(|r| r.key_guard).collect(),
             response_policy: ResponsePolicy::OnApplied,
+            known_txn_status: vec![],
         })
     }
 }
