@@ -410,6 +410,12 @@ impl<E: Engine, L: LockManager, F: KvFormat> Tikv for Service<E, L, F> {
         RawBatchPutResponse
     );
     handle_request!(
+        raw_batch_write,
+        future_raw_batch_write,
+        RawBatchWriteRequest,
+        RawBatchWriteResponse
+    );
+    handle_request!(
         raw_delete,
         future_raw_delete,
         RawDeleteRequest,
@@ -432,6 +438,12 @@ impl<E: Engine, L: LockManager, F: KvFormat> Tikv for Service<E, L, F> {
         future_raw_get_key_ttl,
         RawGetKeyTtlRequest,
         RawGetKeyTtlResponse
+    );
+    handle_request!(
+        raw_set_key_ttl,
+        future_raw_set_key_ttl,
+        RawSetKeyTtlRequest,
+        RawSetKeyTtlResponse
     );
 
     handle_request!(
@@ -1979,6 +1991,55 @@ fn future_raw_batch_put<E: Engine, L: LockManager, F: KvFormat>(
     }
 }
 
+fn future_raw_batch_write<E: Engine, L: LockManager, F: KvFormat>(
+    storage: &Storage<E, L, F>,
+    mut req: RawBatchWriteRequest,
+) -> impl Future<Output = ServerResult<RawBatchWriteResponse>> {
+    let cf = req.take_cf();
+    let write_batch_len = req.get_batch().len();
+    // The TTL for each key in seconds.
+    //
+    // In some TiKV of old versions, only one TTL can be provided and the TTL will
+    // be applied to all keys in the request. For compatibility reasons, if the
+    // length of `ttls` is exactly one, then the TTL will be applied to all keys.
+    // Otherwise, the length mismatch between `ttls` and `pairs` will return an
+    // error.
+    let ttls = if req.get_ttls().is_empty() {
+        vec![0; write_batch_len]
+    } else if req.get_ttls().len() == 1 {
+        vec![req.get_ttls()[0]; write_batch_len]
+    } else {
+        req.take_ttls()
+    };
+    let write_ops = req
+        .take_batch()
+        .into_iter()
+        .map(|mut x| (x.take_key(), x.take_value(), x.get_op()))
+        .collect();
+
+    let (cb, f) = paired_future_callback();
+    let for_atomic = req.get_for_cas();
+    let res = if for_atomic {
+        storage.raw_batch_write_atomic(req.take_context(), cf, write_ops, ttls, cb, false)
+    } else {
+        storage.raw_batch_write(req.take_context(), cf, write_ops, ttls, cb)
+    };
+
+    async move {
+        let v = match res {
+            Err(e) => Err(e),
+            Ok(_) => f.await?,
+        };
+        let mut resp = RawBatchWriteResponse::default();
+        if let Some(err) = extract_region_error(&v) {
+            resp.set_region_error(err);
+        } else if let Err(e) = v {
+            resp.set_error(format!("{}", e));
+        }
+        Ok(resp)
+    }
+}
+
 fn future_raw_delete<E: Engine, L: LockManager, F: KvFormat>(
     storage: &Storage<E, L, F>,
     mut req: RawDeleteRequest,
@@ -2136,6 +2197,35 @@ fn future_raw_get_key_ttl<E: Engine, L: LockManager, F: KvFormat>(
                 Ok(None) => resp.set_not_found(true),
                 Err(e) => resp.set_error(format!("{}", e)),
             }
+        }
+        Ok(resp)
+    }
+}
+
+fn future_raw_set_key_ttl<E: Engine, L: LockManager, F: KvFormat>(
+    storage: &Storage<E, L, F>,
+    mut req: RawSetKeyTtlRequest,
+) -> impl Future<Output = ServerResult<RawSetKeyTtlResponse>> {
+    let (cb, f) = paired_future_callback();
+    // Set ttl operator must use atomic mode
+    let res = storage.raw_batch_set_ttl_atomic(
+        req.take_context(),
+        req.take_cf(),
+        req.take_key(),
+        req.get_ttl(),
+        cb,
+    );
+
+    async move {
+        let v = match res {
+            Err(e) => Err(e),
+            Ok(_) => f.await?,
+        };
+        let mut resp = RawSetKeyTtlResponse::default();
+        if let Some(err) = extract_region_error(&v) {
+            resp.set_region_error(err);
+        } else if let Err(e) = v {
+            resp.set_error(format!("{}", e));
         }
         Ok(resp)
     }

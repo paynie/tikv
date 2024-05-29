@@ -100,7 +100,7 @@ impl<F: KvFormat> CompactionFilter for TtlCompactionFilter<F> {
         value: &[u8],
         value_type: CompactionFilterValueType,
     ) -> CompactionFilterDecision {
-        if value_type != CompactionFilterValueType::Value {
+        if value_type != CompactionFilterValueType::Value && value_type != CompactionFilterValueType::BlobIndex {
             return CompactionFilterDecision::Keep;
         }
         // Only consider data keys.

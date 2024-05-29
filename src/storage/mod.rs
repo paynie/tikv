@@ -87,6 +87,11 @@ use kvproto::{
     },
     pdpb::QueryKind,
 };
+
+use kvproto::kvrpcpb::Op;
+use kvproto::kvrpcpb::Op::Put;
+use kvproto::kvrpcpb::Op::Del;
+
 use pd_client::FeatureGate;
 use raftstore::store::{util::build_key_range, ReadStats, TxnExt, WriteStats};
 use rand::prelude::*;
@@ -102,7 +107,7 @@ use tikv_util::{
 use tracker::{
     clear_tls_tracker_token, set_tls_tracker_token, with_tls_tracker, TrackedFuture, TrackerToken,
 };
-use txn_types::{Key, KvPair, Lock, LockType, TimeStamp, TsSet, Value};
+use txn_types::{Key, KvPair, KvWithOp, Lock, LockType, TimeStamp, TsSet, Value};
 
 pub use self::{
     errors::{get_error_kind_from_header, get_tag_from_header, Error, ErrorHeaderKind, ErrorInner},
@@ -129,7 +134,7 @@ use crate::{
         metrics::{CommandKind, *},
         mvcc::{metrics::ScanLockReadTimeSource::resolve_lock, MvccReader, PointGetterBuilder},
         txn::{
-            commands::{RawAtomicStore, RawCompareAndSwap, TypedCommand},
+            commands::{RawAtomicStore, RawCompareAndSwap, TypedCommand, RawSetKeyTTL},
             flow_controller::{EngineFlowController, FlowController},
             scheduler::TxnScheduler,
             Command, Error as TxnError, ErrorInner as TxnErrorInner,
@@ -433,10 +438,12 @@ impl<E: Engine, L: LockManager, F: KvFormat> Storage<E, L, F> {
                 | CommandKind::raw_batch_scan
                 | CommandKind::raw_put
                 | CommandKind::raw_batch_put
+                | CommandKind::raw_batch_write
                 | CommandKind::raw_delete
                 | CommandKind::raw_delete_range
                 | CommandKind::raw_batch_delete
                 | CommandKind::raw_get_key_ttl
+                | CommandKind::raw_set_key_ttl
                 | CommandKind::raw_compare_and_swap
                 | CommandKind::raw_atomic_store
                 | CommandKind::raw_checksum
@@ -2374,6 +2381,37 @@ impl<E: Engine, L: LockManager, F: KvFormat> Storage<E, L, F> {
             .collect()
     }
 
+    fn raw_batch_write_requests_to_modifies(
+        cf: CfName,
+        write_ops: Vec<KvWithOp>,
+        ttls: Vec<u64>,
+        ts: Option<TimeStamp>,
+    ) -> Vec<Modify> {
+        write_ops
+            .into_iter()
+            .zip(ttls)
+            .map(|((k, v, op), ttl)| {
+                if op == Del {
+                    Modify::Delete(
+                        cf,
+                        F::encode_raw_key_owned(k, ts),
+                    )
+                } else {
+                    let raw_value = RawValue {
+                        user_value: v,
+                        expire_ts: ttl_to_expire_ts(ttl),
+                        is_delete: false,
+                    };
+                    Modify::Put(
+                        cf,
+                        F::encode_raw_key_owned(k, ts),
+                        F::encode_raw_value_owned(raw_value),
+                    )
+                }
+            })
+            .collect()
+    }
+
     /// Write some keys to the storage in a batch.
     pub fn raw_batch_put(
         &self,
@@ -2426,6 +2464,77 @@ impl<E: Engine, L: LockManager, F: KvFormat> Storage<E, L, F> {
             }
 
             let modifies = Self::raw_batch_put_requests_to_modifies(cf, pairs, ttls, ts.unwrap());
+            let mut batch = WriteData::from_modifies(modifies);
+            batch.set_allowed_on_disk_almost_full();
+            let res = kv::write(&engine, &ctx, batch, None);
+            callback(
+                res.await
+                    .unwrap_or_else(|| Err(box_err!("stale command")))
+                    .map_err(Error::from),
+            );
+            KV_COMMAND_COUNTER_VEC_STATIC.get(CMD).inc();
+            SCHED_STAGE_COUNTER_VEC.get(CMD).write_finish.inc();
+            SCHED_HISTOGRAM_VEC_STATIC
+                .get(CMD)
+                .observe(command_duration.saturating_elapsed().as_secs_f64());
+        })
+    }
+
+    /// Write some keys to the storage in a batch.
+    pub fn raw_batch_write(
+        &self,
+        mut ctx: Context,
+        cf: String,
+        write_ops: Vec<KvWithOp>,
+        ttls: Vec<u64>,
+        callback: Callback<()>,
+    ) -> Result<()> {
+        const CMD: CommandKind = CommandKind::raw_batch_write;
+        Self::check_api_version(
+            self.api_version,
+            ctx.api_version,
+            CMD,
+            write_ops.iter().map(|(ref k, _, _)| k),
+        )?;
+
+        let cf = Self::rawkv_cf(&cf, self.api_version)?;
+
+        check_key_size!(
+                write_ops.iter().map(|(ref k, _, _)| k),
+                self.max_key_size,
+                callback
+            );
+        Self::check_ttl_valid(write_ops.len(), &ttls)?;
+
+        let provider = self.causal_ts_provider.clone();
+        let engine = self.engine.clone();
+        let concurrency_manager = self.concurrency_manager.clone();
+        let deadline = Self::get_deadline(&ctx);
+        let priority = ctx.get_priority();
+        let group_name = ctx
+            .get_resource_control_context()
+            .get_resource_group_name()
+            .to_owned();
+        self.sched_raw_command(&group_name, priority, CMD, async move {
+            if let Err(e) = deadline.check() {
+                return callback(Err(Error::from(e)));
+            }
+            let command_duration = tikv_util::time::Instant::now();
+
+            if let Err(e) = Self::check_causal_ts_flushed(&mut ctx, CMD).await {
+                return callback(Err(e));
+            }
+
+            let key_guard = get_raw_key_guard(&provider, concurrency_manager).await;
+            if let Err(e) = key_guard {
+                return callback(Err(e));
+            }
+            let ts = get_causal_ts(&provider).await;
+            if let Err(e) = ts {
+                return callback(Err(e));
+            }
+
+            let modifies = Self::raw_batch_write_requests_to_modifies(cf, write_ops, ttls, ts.unwrap());
             let mut batch = WriteData::from_modifies(modifies);
             batch.set_allowed_on_disk_almost_full();
             let res = kv::write(&engine, &ctx, batch, None);
@@ -3081,6 +3190,78 @@ impl<E: Engine, L: LockManager, F: KvFormat> Storage<E, L, F> {
         self.sched_raw_command(metadata, priority, CMD, async move {
             let modifies = Self::raw_batch_put_requests_to_modifies(cf, pairs, ttls, None);
             let cmd = RawAtomicStore::new(cf, modifies, ctx);
+            Self::sched_raw_atomic_command(
+                sched,
+                cmd,
+                Box::new(|res| callback(res.map_err(Error::from))),
+            );
+        })
+    }
+
+    pub fn raw_batch_write_atomic(
+        &self,
+        ctx: Context,
+        cf: String,
+        write_ops: Vec<KvWithOp>,
+        ttls: Vec<u64>,
+        callback: Callback<()>,
+    ) -> Result<()> {
+        const CMD: CommandKind = CommandKind::raw_atomic_store;
+        Self::check_api_version(
+            self.api_version,
+            ctx.api_version,
+            CMD,
+            write_ops.iter().map(|(ref k, _, _)| k),
+        )?;
+
+        let cf = Self::rawkv_cf(&cf, self.api_version)?;
+        Self::check_ttl_valid(write_ops.len(), &ttls)?;
+
+        let sched = self.get_scheduler();
+        let priority = ctx.get_priority();
+        let group_name = ctx
+            .get_resource_control_context()
+            .get_resource_group_name()
+            .to_owned();
+        self.sched_raw_command(&group_name, priority, CMD, async move {
+            let modifies = Self::raw_batch_write_requests_to_modifies(cf, write_ops, ttls, None);
+            let cmd = RawAtomicStore::new(cf, modifies, ctx);
+            Self::sched_raw_atomic_command(
+                sched,
+                cmd,
+                Box::new(|res| callback(res.map_err(Error::from))),
+            );
+        })
+    }
+
+    pub fn raw_batch_set_ttl_atomic(
+        &self,
+        ctx: Context,
+        cf: String,
+        key: Vec<u8>,
+        ttl: u64,
+        callback: Callback<()>,
+    ) -> Result<()> {
+        const CMD: CommandKind = CommandKind::raw_set_key_ttl;
+        let keys = vec![&key];
+        Self::check_api_version(
+            self.api_version,
+            ctx.api_version,
+            CMD,
+            &keys,
+        )?;
+
+        let cf = Self::rawkv_cf(&cf, self.api_version)?;
+
+        let sched = self.get_scheduler();
+        let priority = ctx.get_priority();
+        let group_name = ctx
+            .get_resource_control_context()
+            .get_resource_group_name()
+            .to_owned();
+
+        self.sched_raw_command(&group_name, priority, CMD, async move {
+            let cmd = RawSetKeyTTL::new(cf, Key::from_encoded(key), ttl, self.api_version, ctx);
             Self::sched_raw_atomic_command(
                 sched,
                 cmd,

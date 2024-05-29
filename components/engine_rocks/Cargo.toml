@@ -58,7 +58,8 @@ tracker = { workspace = true }
 txn_types = { workspace = true }
 
 [dependencies.rocksdb]
-git = "https://github.com/tikv/rust-rocksdb.git"
+git = "https://github.com/paynie/rust-rocksdb"
+branch = "easygraph-8.1"
 package = "rocksdb"
 features = ["encryption"]
 

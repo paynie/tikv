@@ -12,6 +12,8 @@ pub(crate) mod check_txn_status;
 pub(crate) mod cleanup;
 pub(crate) mod commit;
 pub(crate) mod compare_and_swap;
+
+pub(crate) mod set_ttl;
 pub(crate) mod flashback_to_version;
 pub(crate) mod flashback_to_version_read_phase;
 pub(crate) mod flush;
@@ -26,6 +28,7 @@ pub(crate) mod resolve_lock_lite;
 pub(crate) mod resolve_lock_readphase;
 pub(crate) mod rollback;
 pub(crate) mod txn_heart_beat;
+mod set_ttl;
 
 use std::{
     fmt::{self, Debug, Display, Formatter},
@@ -43,6 +46,7 @@ pub use check_txn_status::CheckTxnStatus;
 pub use cleanup::Cleanup;
 pub use commit::Commit;
 pub use compare_and_swap::RawCompareAndSwap;
+pub use set_ttl::RawSetKeyTTL;
 use concurrency_manager::{ConcurrencyManager, KeyHandleGuard};
 pub use flashback_to_version::FlashbackToVersion;
 pub use flashback_to_version_read_phase::{
@@ -114,6 +118,7 @@ pub enum Command {
     FlashbackToVersionReadPhase(FlashbackToVersionReadPhase),
     FlashbackToVersion(FlashbackToVersion),
     Flush(Flush),
+    RawSetKeyTTL(RawSetKeyTTL),
 }
 
 /// A `Command` with its return type, reified as the generic parameter `T`.
@@ -675,6 +680,7 @@ impl Command {
             Command::FlashbackToVersionReadPhase(t) => t,
             Command::FlashbackToVersion(t) => t,
             Command::Flush(t) => t,
+            Command::RawSetKeyTTL(t) => t,
         }
     }
 
@@ -703,6 +709,7 @@ impl Command {
             Command::FlashbackToVersionReadPhase(t) => t,
             Command::FlashbackToVersion(t) => t,
             Command::Flush(t) => t,
+            Command::RawSetKeyTTL(t) => t,
         }
     }
 
@@ -745,6 +752,7 @@ impl Command {
             Command::RawAtomicStore(t) => t.process_write(snapshot, context),
             Command::FlashbackToVersion(t) => t.process_write(snapshot, context),
             Command::Flush(t) => t.process_write(snapshot, context),
+            Command::RawSetKeyTTL(t) => t.process_write(snapshot, context),
             _ => panic!("unsupported write command"),
         }
     }
