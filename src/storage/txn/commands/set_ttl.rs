@@ -11,7 +11,7 @@ use crate::storage::{
     lock_manager::LockManager,
     txn::{
         commands::{
-            CommandExt, ReleasedLocks, ResponsePolicy, WriteCommand,
+            Command, CommandExt, ReleasedLocks, ResponsePolicy, TypedCommand, WriteCommand,
             WriteContext, WriteResult,
         },
         Result,

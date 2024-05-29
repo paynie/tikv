@@ -2509,11 +2509,8 @@ impl<E: Engine, L: LockManager, F: KvFormat> Storage<E, L, F> {
         let concurrency_manager = self.concurrency_manager.clone();
         let deadline = Self::get_deadline(&ctx);
         let priority = ctx.get_priority();
-        let group_name = ctx
-            .get_resource_control_context()
-            .get_resource_group_name()
-            .to_owned();
-        self.sched_raw_command(&group_name, priority, CMD, async move {
+        let metadata = TaskMetadata::from_ctx(ctx.get_resource_control_context());
+        self.sched_raw_command(metadata, priority, CMD, async move {
             if let Err(e) = deadline.check() {
                 return callback(Err(Error::from(e)));
             }
@@ -3217,11 +3214,8 @@ impl<E: Engine, L: LockManager, F: KvFormat> Storage<E, L, F> {
 
         let sched = self.get_scheduler();
         let priority = ctx.get_priority();
-        let group_name = ctx
-            .get_resource_control_context()
-            .get_resource_group_name()
-            .to_owned();
-        self.sched_raw_command(&group_name, priority, CMD, async move {
+        let metadata = TaskMetadata::from_ctx(ctx.get_resource_control_context());
+        self.sched_raw_command(metadata, priority, CMD, async move {
             let modifies = Self::raw_batch_write_requests_to_modifies(cf, write_ops, ttls, None);
             let cmd = RawAtomicStore::new(cf, modifies, ctx);
             Self::sched_raw_atomic_command(
@@ -3253,12 +3247,8 @@ impl<E: Engine, L: LockManager, F: KvFormat> Storage<E, L, F> {
 
         let sched = self.get_scheduler();
         let priority = ctx.get_priority();
-        let group_name = ctx
-            .get_resource_control_context()
-            .get_resource_group_name()
-            .to_owned();
-
-        self.sched_raw_command(&group_name, priority, CMD, async move {
+        let metadata = TaskMetadata::from_ctx(ctx.get_resource_control_context());
+        self.sched_raw_command(metadata, priority, CMD, async move {
             let cmd = RawSetKeyTTL::new(cf, Key::from_encoded(key), ttl, self.api_version, ctx);
             Self::sched_raw_atomic_command(
                 sched,
