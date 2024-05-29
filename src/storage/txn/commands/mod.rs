@@ -858,6 +858,7 @@ impl HeapSize for Command {
                 Command::MvccByStartTs(t) => t.approximate_heap_size(),
                 Command::RawCompareAndSwap(t) => t.approximate_heap_size(),
                 Command::RawAtomicStore(t) => t.approximate_heap_size(),
+                Command::RawSetKeyTTL(t) => t.approximate_heap_size(),
                 Command::FlashbackToVersionReadPhase(t) => t.approximate_heap_size(),
                 Command::FlashbackToVersion(t) => t.approximate_heap_size(),
                 Command::Flush(t) => t.approximate_heap_size(),
