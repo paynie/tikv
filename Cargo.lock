@@ -4803,7 +4803,7 @@ dependencies = [
 [[package]]
 name = "rocksdb"
 version = "0.3.0"
-source = "git+https://github.com/paynie/rust-rocksdb?branch=easygraph-8.1#8d57aeb6fab3ffd4331e2a7e4cc09ac711726ee0"
+source = "git+https://github.com/paynie/rust-rocksdb?branch=easygraph-8.1#ed329e9793ebb049d9dc0c66fac282d81616573f"
 dependencies = [
  "libc 0.2.151",
  "librocksdb_sys",
