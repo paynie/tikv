@@ -4047,7 +4047,7 @@ impl TikvConfig {
                 if self.rocksdb.titan.enabled.is_none() {
                     // If the user doesn't specify titan.enabled, we enable it by default for newly
                     // created clusters.
-                    if (kv_data_exists && !titan_data_exists) || self.storage.enable_ttl {
+                    if kv_data_exists && !titan_data_exists {
                         self.rocksdb.titan.enabled = Some(false);
                     } else {
                         self.rocksdb.titan.enabled = Some(true);
@@ -4080,7 +4080,7 @@ impl TikvConfig {
                 if self.rocksdb.titan.enabled.is_none() {
                     // If the user doesn't specify titan.enabled, we enable it by default for newly
                     // created clusters.
-                    if (kv_data_exists && !titan_data_exists) {
+                    if kv_data_exists && !titan_data_exists {
                         self.rocksdb.titan.enabled = Some(false);
                     } else {
                         self.rocksdb.titan.enabled = Some(true);
