@@ -4077,8 +4077,38 @@ impl TikvConfig {
                 }
             }
             EngineType::RaftKv2 => {
-                self.rocksdb.titan.enabled = Some(false);
-                self.rocksdb.defaultcf.titan.min_blob_size = Some(DEFAULT_MIN_BLOB_SIZE);
+                if self.rocksdb.titan.enabled.is_none() {
+                    // If the user doesn't specify titan.enabled, we enable it by default for newly
+                    // created clusters.
+                    if (kv_data_exists && !titan_data_exists) {
+                        self.rocksdb.titan.enabled = Some(false);
+                    } else {
+                        self.rocksdb.titan.enabled = Some(true);
+                    }
+                }
+
+                if self.rocksdb.defaultcf.titan.min_blob_size.is_none() {
+                    // get blob size from last config
+                    self.rocksdb.defaultcf.titan.min_blob_size =
+                        Some(if let Some(last_cfg) = &last_cfg {
+                            // If previous config has titan enabled, we use the previous
+                            // min-blob-size.
+                            if last_cfg.rocksdb.titan.enabled.unwrap_or(false) {
+                                last_cfg
+                                    .rocksdb
+                                    .defaultcf
+                                    .titan
+                                    .min_blob_size
+                                    .unwrap_or(DEFAULT_MIN_BLOB_SIZE)
+                            } else {
+                                // If previous config has titan disabled, we use the current default
+                                // value
+                                DEFAULT_MIN_BLOB_SIZE
+                            }
+                        } else {
+                            DEFAULT_MIN_BLOB_SIZE
+                        });
+                }
             }
         }
         Ok(())
