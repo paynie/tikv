@@ -3236,8 +3236,9 @@ impl<E: Engine, L: LockManager, F: KvFormat> Storage<E, L, F> {
     ) -> Result<()> {
         const CMD: CommandKind = CommandKind::raw_set_key_ttl;
         let keys = vec![&key];
+        let api_version = self.api_version;
         Self::check_api_version(
-            self.api_version,
+            api_version,
             ctx.api_version,
             CMD,
             &keys,
@@ -3249,7 +3250,7 @@ impl<E: Engine, L: LockManager, F: KvFormat> Storage<E, L, F> {
         let priority = ctx.get_priority();
         let metadata = TaskMetadata::from_ctx(ctx.get_resource_control_context());
         self.sched_raw_command(metadata, priority, CMD, async move {
-            let cmd = RawSetKeyTTL::new(cf, Key::from_encoded(key), ttl, self.api_version, ctx);
+            let cmd = RawSetKeyTTL::new(cf, Key::from_encoded(key), ttl, api_version, ctx);
             Self::sched_raw_atomic_command(
                 sched,
                 cmd,
