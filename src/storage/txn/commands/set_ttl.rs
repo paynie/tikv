@@ -26,12 +26,16 @@ command! {
     /// The previous value is always returned regardless of whether the new value is set.
     RawSetKeyTTL:
         cmd_ty => (),
-        display => "kv::command::raw_set_key_ttl {:?}", (ctx),
+        display => {"kv::command::raw_set_key_ttl {:?}", (ctx),}
         content => {
             cf: CfName,
             key: Key,
             ttl: u64,
             api_version: ApiVersion,
+        }
+        in_heap => {
+            key,
+            ttl,
         }
 }
 
