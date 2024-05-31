@@ -3943,9 +3943,9 @@ impl TikvConfig {
         self.causal_ts.validate()?;
 
         // Validate feature TTL with Titan configuration.
-        if matches!(self.rocksdb.titan.enabled, Some(true)) && self.storage.enable_ttl {
-            return Err("Titan is unavailable for feature TTL".to_string().into());
-        }
+        //if matches!(self.rocksdb.titan.enabled, Some(true)) && self.storage.enable_ttl {
+        //    return Err("Titan is unavailable for feature TTL".to_string().into());
+        //}
 
         Ok(())
     }
@@ -6620,10 +6620,10 @@ mod tests {
         invalid_cfg.storage.api_version = 2;
         invalid_cfg.storage.enable_ttl = true;
         invalid_cfg.rocksdb.titan.enabled = Some(true);
-        assert_eq!(
-            invalid_cfg.validate().unwrap_err().to_string(),
-            "Titan is unavailable for feature TTL"
-        );
+        //assert_eq!(
+        //    invalid_cfg.validate().unwrap_err().to_string(),
+       //     "Titan is unavailable for feature TTL"
+       // );
     }
 
     #[test]

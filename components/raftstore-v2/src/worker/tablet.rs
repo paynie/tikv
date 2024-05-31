@@ -282,6 +282,14 @@ impl<EK: KvEngine> Runner<EK> {
         let range2 = Range::new(&end_key, keys::DATA_MAX_KEY);
         let mut wopts = WriteOptions::default();
         wopts.set_disable_wal(true);
+
+        info!(
+            self.logger,
+            "start to trim tablet";
+            "start_key" => log_wrappers::Value::key(&start_key),
+            "end_key" => log_wrappers::Value::key(&end_key),
+        );
+
         if let Err(e) =
             tablet.delete_ranges_cfs(&wopts, DeleteStrategy::DeleteFiles, &[range1, range2])
         {
