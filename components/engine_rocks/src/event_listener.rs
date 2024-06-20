@@ -196,7 +196,7 @@ impl rocksdb::EventListener for RocksPersistenceListener {
         // Note: first_seqno is effectively the smallest seqno of memtable.
         // earliest_seqno has ambiguous semantics.
 
-        if(info.num_entries() == 0 && info.num_deletes() == 0 && info.first_seqno() == 0) {
+        if info.num_entries() == 0 && info.num_deletes() == 0 && info.first_seqno() == 0 {
             return;
         }
 
