@@ -20,7 +20,8 @@ use engine_traits::{
     CF_WRITE,
 };
 use external_storage::{
-    compression_reader_dispatcher, encrypt_wrap_reader, ExternalStorage, RestoreConfig,
+    compression_reader_dispatcher, encrypt_wrap_reader, ExternalStorage, HdfsStorage, HdfsConfig,
+    RestoreConfig, BackendConfig,
 };
 use file_system::{IoType, OpenOptions};
 use kvproto::{
@@ -29,6 +30,8 @@ use kvproto::{
     kvrpcpb::ApiVersion,
     metapb::Region,
 };
+
+use kvproto::brpb::StorageBackend_oneof_backend::Hdfs;
 use tikv_util::{
     codec::{
         bytes::{decode_bytes_in_place, encode_bytes},
@@ -150,6 +153,7 @@ pub struct SstImporter<E: KvEngine> {
     _download_rt: Runtime,
     file_locks: Arc<DashMap<String, (CacheKvFile, Instant)>>,
     memory_quota: Arc<MemoryQuota>,
+    cfg: Config,
 }
 
 impl<E: KvEngine> SstImporter<E> {
@@ -160,11 +164,12 @@ impl<E: KvEngine> SstImporter<E> {
         api_version: ApiVersion,
         raft_kv_v2: bool,
     ) -> Result<Self> {
-        let switcher = if raft_kv_v2 {
-            Either::Right(ImportModeSwitcherV2::new(cfg))
-        } else {
-            Either::Left(ImportModeSwitcher::new(cfg))
-        };
+        let switcher = Either::Left(ImportModeSwitcher::new(cfg));
+        //let switcher = if raft_kv_v2 {
+        //    Either::Right(ImportModeSwitcherV2::new(cfg))
+        //} else {
+        //    Either::Left(ImportModeSwitcher::new(cfg))
+        //};
         let cached_storage = CacheMap::default();
         // We are going to run some background tasks here, (hyper needs to maintain the
         // connection, the cache map needs gc intervally.) so we must create a
@@ -202,6 +207,7 @@ impl<E: KvEngine> SstImporter<E> {
             cached_storage,
             _download_rt: download_rt,
             memory_quota: Arc::new(MemoryQuota::new(memory_limit as _)),
+            cfg: cfg.clone(),
         })
     }
 
@@ -476,12 +482,50 @@ impl<E: KvEngine> SstImporter<E> {
     ) -> Result<Arc<dyn ExternalStorage>> {
         // prepare to download the file from the external_storage
         // TODO: pass a config to support hdfs
+
+        /*
+        match &backend.backend.as_ref().unwrap() {
+            Hdfs(hdfs) => {
+                let hdfs_config = HdfsConfig {
+                    hadoop_home: self.cfg.hadoop.home.clone(),
+                    hadoop_local_tmp_path: self.cfg.hadoop.local_tmp_path.clone(),
+                    linux_user: self.cfg.hadoop.linux_user.clone(),
+                };
+                let s = HdfsStorage::new(backend.get_hdfs().get_remote(), hdfs_config)?;
+                return Ok(Arc::from(s));
+            }
+            _ => {}
+        }
+         */
+
+        // Generate HDFS config
+        let hdfs_config = match &backend.backend.as_ref().unwrap() {
+            Hdfs(hdfs) => {
+                Some(HdfsConfig {
+                    hadoop_home: self.cfg.hadoop.home.clone(),
+                    hadoop_local_tmp_path: self.cfg.hadoop.local_tmp_path.clone(),
+                    linux_user: self.cfg.hadoop.linux_user.clone(),
+                })
+            }
+            _ => { None }
+        };
+
+        // Generate backend config
+        let backend_config = match hdfs_config {
+            Some(hadoop_config) => BackendConfig {
+                s3_multi_part_size: 0,
+                hdfs_config: hadoop_config,
+            },
+
+            None => Default::default(),
+        };
+
         let ext_storage = if cache_id.is_empty() {
             EXT_STORAGE_CACHE_COUNT.with_label_values(&["skip"]).inc();
-            let s = external_storage::create_storage(backend, Default::default())?;
+            let s = external_storage::create_storage(backend, backend_config.clone())?;
             Arc::from(s)
         } else {
-            self.cached_storage.cached_or_create(cache_id, backend)?
+            self.cached_storage.cached_or_create(cache_id, backend, backend_config.clone())?
         };
         Ok(ext_storage)
     }
@@ -712,10 +756,10 @@ impl<E: KvEngine> SstImporter<E> {
                     }
                     _ => {
                         return Err(bug(concat!(
-                            "using both read-to-memory and download-to-file is unacceptable for now.",
-                            "(If you think it is possible in the future you are reading this, ",
-                            "please change this line to `return item.get.0.clone()`)",
-                            "(Please also check the state transform is OK too.)",
+                        "using both read-to-memory and download-to-file is unacceptable for now.",
+                        "(If you think it is possible in the future you are reading this, ",
+                        "please change this line to `return item.get.0.clone()`)",
+                        "(Please also check the state transform is OK too.)",
                         )));
                     }
                 },
@@ -788,7 +832,7 @@ impl<E: KvEngine> SstImporter<E> {
             expected_sha256,
             external_storage::MIN_READ_SPEED,
         )
-        .await;
+            .await;
         let url = ext_storage.url()?.to_string();
         let buff = r.map_err(|e| Error::CannotReadExternalStorage {
             url: url.to_string(),
@@ -885,7 +929,7 @@ impl<E: KvEngine> SstImporter<E> {
             "",
             restore_config,
         )
-        .await?;
+            .await?;
         info!(
             "download file finished {}, offset {}, length {}",
             src_name,
@@ -1093,6 +1137,10 @@ impl<E: KvEngine> SstImporter<E> {
     ) -> Result<Option<Range>> {
         let path = self.dir.join_for_write(meta)?;
 
+        debug!("dest file ";
+            "meta" => ?meta,
+            "name" => name,);
+
         let file_crypter = crypter.map(|c| FileEncryptionInfo {
             method: c.cipher_type,
             key: c.cipher_key,
@@ -1114,7 +1162,7 @@ impl<E: KvEngine> SstImporter<E> {
             ext.cache_key.unwrap_or(""),
             restore_config,
         )
-        .await?;
+            .await?;
 
         // now validate the SST file.
         let dst_file_name = path.temp.to_str().unwrap();
@@ -1652,8 +1700,8 @@ mod tests {
     fn create_external_sst_file_with_write_fn<F>(
         write_fn: F,
     ) -> Result<(tempfile::TempDir, StorageBackend, SstMeta)>
-    where
-        F: FnOnce(&mut RocksSstWriter) -> Result<()>,
+        where
+            F: FnOnce(&mut RocksSstWriter) -> Result<()>,
     {
         let ext_sst_dir = tempfile::tempdir()?;
         let mut sst_writer =
@@ -1687,7 +1735,7 @@ mod tests {
     }
 
     fn create_sample_external_kv_file()
-    -> Result<(tempfile::TempDir, StorageBackend, KvMeta, Vec<u8>)> {
+        -> Result<(tempfile::TempDir, StorageBackend, KvMeta, Vec<u8>)> {
         let ext_dir = tempfile::tempdir()?;
         let file_name = "v1/t000001/abc.log";
         let file_path = ext_dir.path().join(file_name);
@@ -1763,7 +1811,7 @@ mod tests {
     }
 
     fn create_sample_external_sst_file_txn_default()
-    -> Result<(tempfile::TempDir, StorageBackend, SstMeta)> {
+        -> Result<(tempfile::TempDir, StorageBackend, SstMeta)> {
         let ext_sst_dir = tempfile::tempdir()?;
         let mut sst_writer = new_sst_writer(
             ext_sst_dir
@@ -1793,7 +1841,7 @@ mod tests {
     }
 
     fn create_sample_external_sst_file_txn_write()
-    -> Result<(tempfile::TempDir, StorageBackend, SstMeta)> {
+        -> Result<(tempfile::TempDir, StorageBackend, SstMeta)> {
         let ext_sst_dir = tempfile::tempdir()?;
         let mut sst_writer = new_sst_writer(
             ext_sst_dir
@@ -1876,7 +1924,7 @@ mod tests {
             Some(hash256),
             8192,
         ))
-        .unwrap();
+            .unwrap();
         assert_eq!(&*output, data);
     }
 
@@ -1894,7 +1942,7 @@ mod tests {
             None,
             usize::MAX,
         ))
-        .unwrap_err();
+            .unwrap_err();
         assert_eq!(err.kind(), io::ErrorKind::TimedOut);
     }
 
@@ -1917,7 +1965,7 @@ mod tests {
             Some(sha_256.clone()),
             0,
         ))
-        .unwrap();
+            .unwrap();
         assert_eq!(&output, data);
 
         // test without expected_sha245.
@@ -1929,7 +1977,7 @@ mod tests {
             None,
             0,
         ))
-        .unwrap();
+            .unwrap();
         assert_eq!(&output, data);
 
         // test with wrong expectd_len.
@@ -1941,7 +1989,7 @@ mod tests {
             Some(sha_256.clone()),
             0,
         ))
-        .unwrap_err();
+            .unwrap_err();
         assert!(err.to_string().contains("length not match"));
 
         // test with wrong expected_sha256.
@@ -1953,7 +2001,7 @@ mod tests {
             Some(sha_256[..sha_256.len() - 1].to_vec()),
             0,
         ))
-        .unwrap_err();
+            .unwrap_err();
         assert!(err.to_string().contains("sha256 not match"));
     }
 
@@ -1969,7 +2017,7 @@ mod tests {
             None,
             usize::MAX,
         ))
-        .unwrap_err();
+            .unwrap_err();
         assert_eq!(err.kind(), io::ErrorKind::TimedOut);
     }
 
@@ -2036,7 +2084,7 @@ mod tests {
             ApiVersion::V1,
             false,
         )
-        .unwrap();
+            .unwrap();
         let ext_storage = {
             importer.wrap_kms(
                 importer.external_storage_or_cache(&backend, "").unwrap(),
@@ -2050,7 +2098,7 @@ mod tests {
             ext_storage,
             &Limiter::new(f64::INFINITY),
         ))
-        .unwrap();
+            .unwrap();
 
         assert!(
             matches!(output.clone(), CacheKvFile::Mem(rc) if &*rc.get().unwrap().content == buff.as_slice()),
@@ -2093,7 +2141,7 @@ mod tests {
             ApiVersion::V1,
             false,
         )
-        .unwrap();
+            .unwrap();
         let ext_storage = {
             let inner = importer.wrap_kms(
                 importer.external_storage_or_cache(&backend, "").unwrap(),
@@ -2115,7 +2163,7 @@ mod tests {
             &Limiter::new(f64::INFINITY),
             restore_config,
         ))
-        .unwrap();
+            .unwrap();
         assert_eq!(
             buff,
             output,
@@ -2138,7 +2186,7 @@ mod tests {
             &Limiter::new(f64::INFINITY),
             restore_config,
         ))
-        .unwrap();
+            .unwrap();
         assert_eq!(&buff[offset as _..(offset + len) as _], &output[..]);
     }
 
@@ -2161,7 +2209,7 @@ mod tests {
             ApiVersion::V1,
             false,
         )
-        .unwrap();
+            .unwrap();
         let ext_storage = {
             importer.wrap_kms(
                 importer.external_storage_or_cache(&backend, "").unwrap(),
@@ -2183,7 +2231,7 @@ mod tests {
             &backend,
             &Limiter::new(f64::INFINITY),
         ))
-        .unwrap();
+            .unwrap();
         assert_eq!(*output, buff);
         check_file_exists(&path.save, None);
 
@@ -2215,7 +2263,7 @@ mod tests {
             ApiVersion::V1,
             false,
         )
-        .unwrap();
+            .unwrap();
 
         // perform download file into .temp dir.
         let file_name = "sample.sst";
@@ -2252,7 +2300,7 @@ mod tests {
             ApiVersion::V1,
             false,
         )
-        .unwrap();
+            .unwrap();
 
         let path = importer.dir.get_import_path(kv_meta.get_name()).unwrap();
         let restore_config = external_storage::RestoreConfig {
@@ -2344,7 +2392,7 @@ mod tests {
             ApiVersion::V1,
             false,
         )
-        .unwrap();
+            .unwrap();
 
         let db_path = temp_dir.path().join("db");
         let env = get_env(Some(key_manager), None /* io_rate_limiter */).unwrap();
@@ -2745,7 +2793,7 @@ mod tests {
         );
         match &result {
             Err(Error::EngineTraits(TraitError::Engine(s)))
-                if s.state().starts_with("Corruption:") => {}
+            if s.state().starts_with("Corruption:") => {}
             _ => panic!("unexpected download result: {:?}", result),
         }
     }
@@ -3080,7 +3128,7 @@ mod tests {
             ApiVersion::V1,
             false,
         )
-        .unwrap();
+            .unwrap();
         assert_eq!(importer.import_support_download(), false);
 
         let import_dir = tempfile::tempdir().unwrap();
@@ -3094,7 +3142,7 @@ mod tests {
             ApiVersion::V1,
             false,
         )
-        .unwrap();
+            .unwrap();
         assert_eq!(importer.import_support_download(), true);
     }
 
@@ -3109,7 +3157,7 @@ mod tests {
             ApiVersion::V1,
             false,
         )
-        .unwrap();
+            .unwrap();
         assert_eq!(importer.memory_quota.in_use(), 0);
 
         // test inc_mem_and_check() and dec_mem() successfully.
@@ -3143,7 +3191,7 @@ mod tests {
             ApiVersion::V1,
             false,
         )
-        .unwrap();
+            .unwrap();
 
         let key = "file1";
         let r = Arc::new(OnceCell::new());

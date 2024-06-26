@@ -12,6 +12,25 @@ use tikv_util::{config::ReadableDuration, HandyRwLock};
 #[derive(Clone, Serialize, Deserialize, PartialEq, Debug, OnlineConfig)]
 #[serde(default)]
 #[serde(rename_all = "kebab-case")]
+pub struct HadoopConfig {
+    pub home: String,
+    pub linux_user: String,
+    pub local_tmp_path: String,
+}
+
+impl Default for HadoopConfig {
+    fn default() -> HadoopConfig {
+        HadoopConfig {
+            home: String::from(""),
+            linux_user: String::from(""),
+            local_tmp_path: String::from(""),
+        }
+    }
+}
+
+#[derive(Clone, Serialize, Deserialize, PartialEq, Debug, OnlineConfig)]
+#[serde(default)]
+#[serde(rename_all = "kebab-case")]
 pub struct Config {
     #[online_config(skip)]
     pub num_threads: usize,
@@ -24,6 +43,8 @@ pub struct Config {
     pub import_mode_timeout: ReadableDuration,
     /// the ratio of system memory used for import.
     pub memory_use_ratio: f64,
+    #[online_config(submodule)]
+    pub hadoop: HadoopConfig,
 }
 
 impl Default for Config {
@@ -33,6 +54,7 @@ impl Default for Config {
             stream_channel_window: 128,
             import_mode_timeout: ReadableDuration::minutes(10),
             memory_use_ratio: 0.3,
+            hadoop: HadoopConfig::default(),
         }
     }
 }

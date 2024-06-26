@@ -78,7 +78,7 @@ impl<F: KvFormat> TablePropertiesCollector for TtlPropertiesCollector<F> {
         if entry_type != DBEntryType::Put && entry_type != DBEntryType::BlobIndex {
             return;
         }
-        
+
         // Only consider data keys.
         if !key.starts_with(keys::DATA_PREFIX_KEY) {
             return;

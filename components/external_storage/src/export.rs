@@ -13,6 +13,9 @@ use kvproto::brpb::{
 };
 use tikv_util::time::{Instant, Limiter};
 
+use kvproto::brpb::StorageBackend_oneof_backend::Hdfs;
+pub use external_storage::HdfsConfig;
+
 use crate::{
     compression_reader_dispatcher, encrypt_wrap_reader, read_external_storage_into_file,
     record_storage_create, BackendConfig, ExternalData, ExternalStorage, HdfsStorage, LocalStorage,
@@ -23,6 +26,16 @@ pub fn create_storage(
     storage_backend: &StorageBackend,
     config: BackendConfig,
 ) -> io::Result<Box<dyn ExternalStorage>> {
+    // Just for hdfs
+    match &storage_backend.backend.as_ref().unwrap() {
+        Hdfs(hdfs) => {
+            // HDFS
+            return Ok(Box::new(HdfsStorage::new(&hdfs.remote, config.hdfs_config)?));
+        },
+
+        _ => {},
+    }
+
     if let Some(backend) = &storage_backend.backend {
         create_backend(backend, config)
     } else {

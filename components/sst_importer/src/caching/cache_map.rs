@@ -12,6 +12,8 @@ use dashmap::{mapref::entry::Entry, DashMap};
 use futures::Future;
 
 use crate::metrics::EXT_STORAGE_CACHE_COUNT;
+use external_storage_export::BackendConfig;
+use crate::caching::storage_cache::StoragePool;
 
 #[derive(Clone, Default)]
 pub struct CacheMap<M: MakeCache>(Arc<CacheMapInner<M>>);
@@ -42,6 +44,7 @@ pub trait MakeCache: 'static {
     type Error;
 
     fn make_cache(&self) -> std::result::Result<Self::Cached, Self::Error>;
+    fn make_cache_with_config(&self, backend_config: BackendConfig) -> std::result::Result<Self::Cached, Self::Error>;
 }
 
 #[derive(Debug)]
@@ -127,6 +130,7 @@ impl<M: MakeCache> CacheMap<M> {
         &self,
         cache_key: &str,
         backend: &M,
+        backend_config: BackendConfig,
     ) -> std::result::Result<<M::Cached as ShareOwned>::Shared, M::Error> {
         let s = self.0.cached.get_mut(cache_key);
         match s {
@@ -144,7 +148,7 @@ impl<M: MakeCache> CacheMap<M> {
                     }
                     Entry::Vacant(v) => {
                         EXT_STORAGE_CACHE_COUNT.with_label_values(&["miss"]).inc();
-                        let pool = backend.make_cache()?;
+                        let pool = backend.make_cache_with_config(backend_config)?;
                         info!("Insert storage cache."; "name" => %cache_key, "cached" => ?pool);
                         let shared = pool.share_owned();
                         v.insert(Cached::new(pool));

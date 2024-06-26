@@ -903,6 +903,7 @@ impl<E: Engine, R: RegionInfoProvider + Clone + 'static> Endpoint<E, R> {
             s3_multi_part_size: self.config_manager.0.read().unwrap().s3_multi_part_size.0 as usize,
             hdfs_config: HdfsConfig {
                 hadoop_home: self.config_manager.0.read().unwrap().hadoop.home.clone(),
+                hadoop_local_tmp_path: self.config_manager.0.read().unwrap().hadoop.local_tmp_path.clone(),
                 linux_user: self
                     .config_manager
                     .0
