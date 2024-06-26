@@ -2818,6 +2818,7 @@ mod readpool_tests {
 pub struct HadoopConfig {
     pub home: String,
     pub linux_user: String,
+    pub local_tmp_path: String,
 }
 
 #[derive(Clone, Serialize, Deserialize, PartialEq, Debug, OnlineConfig)]
