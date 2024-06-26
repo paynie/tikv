@@ -14,7 +14,6 @@ use kvproto::brpb::{
 use tikv_util::time::{Instant, Limiter};
 
 use kvproto::brpb::StorageBackend_oneof_backend::Hdfs;
-pub use external_storage::HdfsConfig;
 
 use crate::{
     compression_reader_dispatcher, encrypt_wrap_reader, read_external_storage_into_file,
