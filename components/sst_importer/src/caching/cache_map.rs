@@ -12,7 +12,7 @@ use dashmap::{mapref::entry::Entry, DashMap};
 use futures::Future;
 
 use crate::metrics::EXT_STORAGE_CACHE_COUNT;
-use external_storage_export::BackendConfig;
+use external_storage::BackendConfig;
 use crate::caching::storage_cache::StoragePool;
 
 #[derive(Clone, Default)]
@@ -166,6 +166,7 @@ mod tests {
         convert::Infallible,
         sync::atomic::{AtomicBool, Ordering},
     };
+    use external_storage::BackendConfig;
 
     use super::{CacheMap, CacheMapInner, MakeCache};
 
@@ -179,6 +180,10 @@ mod tests {
         fn make_cache(&self) -> std::result::Result<Self::Cached, Self::Error> {
             self.0.store(true, Ordering::SeqCst);
             Ok(())
+        }
+
+        fn make_cache_with_config(&self, backend_config: BackendConfig) -> Result<Self::Cached, Self::Error> {
+            todo!()
         }
     }
 
