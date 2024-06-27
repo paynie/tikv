@@ -164,12 +164,12 @@ impl<E: KvEngine> SstImporter<E> {
         api_version: ApiVersion,
         raft_kv_v2: bool,
     ) -> Result<Self> {
-        let switcher = Either::Left(ImportModeSwitcher::new(cfg));
-        //let switcher = if raft_kv_v2 {
-        //    Either::Right(ImportModeSwitcherV2::new(cfg))
-        //} else {
-        //    Either::Left(ImportModeSwitcher::new(cfg))
-        //};
+        //let switcher = Either::Left(ImportModeSwitcher::new(cfg));
+        let switcher = if raft_kv_v2 {
+            Either::Right(ImportModeSwitcherV2::new(cfg))
+        } else {
+            Either::Left(ImportModeSwitcher::new(cfg))
+        };
         let cached_storage = CacheMap::default();
         // We are going to run some background tasks here, (hyper needs to maintain the
         // connection, the cache map needs gc intervally.) so we must create a
