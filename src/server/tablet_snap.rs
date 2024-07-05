@@ -650,7 +650,7 @@ async fn find_missing(
 
                     let blob_os_name = entry.file_name();
                     let blob_name = blob_os_name.to_str().unwrap().to_string();
-                    info!("find blob file "; "file name" => blob_name);
+                    info!("find blob file "; "file name" => &blob_name);
                     let blob_file_size = entry.metadata()?.len();
                     other_files.push((blob_name, blob_file_size));
                 }
@@ -659,7 +659,7 @@ async fn find_missing(
         }
         let os_name = entry.file_name();
         let name = os_name.to_str().unwrap().to_string();
-        info!("find sst file "; "name" => name);
+        info!("find sst file "; "name" => &name);
         let file_size = entry.metadata()?.len();
         if is_sst(&name) {
             sst_sizes += file_size;
