@@ -80,6 +80,8 @@ const PREVIEW_BATCH_SIZE: usize = 256;
 const FILE_CHUNK_LEN: usize = ReadableSize::mb(1).0 as usize;
 const USE_CACHE_THRESHOLD: u64 = ReadableSize::mb(4).0;
 
+const TITAN_DIR_NAME: &str = "titan";
+
 fn is_sst(file_name: &str) -> bool {
     file_name.ends_with(".sst")
 }
@@ -376,8 +378,23 @@ async fn accept_one_file(
         None
     };
     let name = chunk.file_name;
+
+    // Create sub directory if need
+    let sub_path: String = chunk.sub_path;
+    if !sub_path.is_empty() {
+        let sub_dir_path = path.join(&sub_path).as_path();
+        if !sub_dir_path.exists() {
+            fs::create_dir_all(sub_dir_path)?;
+        }
+    }
+
     digest.write(name.as_bytes());
-    let path = path.join(&name);
+    let path = if sub_path.is_empty() {
+        path.join(&name)
+    } else {
+        path.join(&sub_path).join(&name)
+    };
+
     let mut f = OpenOptions::new()
         .write(true)
         .create_new(true)
@@ -630,7 +647,7 @@ async fn find_missing(
     receiver: &mut (impl Stream<Item = grpcio::Result<TabletSnapshotResponse>> + Unpin),
     limiter: &Limiter,
     key_manager: &Option<Arc<DataKeyManager>>,
-) -> Result<Vec<(String, u64)>> {
+) -> Result<Vec<(String, String, u64)>> {
     let mut sst_sizes = 0;
     let mut ssts = HashMap::default();
     let mut other_files = vec![];
@@ -640,7 +657,7 @@ async fn find_missing(
         // What if it's titan?
         if !ft.is_file() {
             // Get titan blob files
-            if entry.file_name().to_str().unwrap().eq("titan") {
+            if entry.file_name().to_str().unwrap().eq(TITAN_DIR_NAME) {
                 for blob_f in fs::read_dir(entry.path().as_path())? {
                     let blob_entry = blob_f?;
                     let blob_ft = entry.file_type()?;
@@ -652,7 +669,7 @@ async fn find_missing(
                     let blob_name = blob_os_name.to_str().unwrap().to_string();
                     info!("find blob file "; "file name" => &blob_name);
                     let blob_file_size = entry.metadata()?.len();
-                    other_files.push((blob_name, blob_file_size));
+                    other_files.push((blob_name, TITAN_DIR_NAME.to_string(), blob_file_size));
                 }
             }
             continue;
@@ -665,14 +682,18 @@ async fn find_missing(
             sst_sizes += file_size;
             ssts.insert(name, file_size);
         } else {
-            other_files.push((name, file_size));
+            other_files.push((name, "".to_string(), file_size));
         }
     }
     if sst_sizes < USE_CACHE_THRESHOLD {
         sender
             .send((head, WriteFlags::default().buffer_hint(true)))
             .await?;
-        other_files.extend(ssts);
+        let iter = ssts.iter();
+
+        for (file_name, file_size) in ssts {
+            other_files.push((file_name, "".to_string(), file_size));
+        }
         return Ok(other_files);
     }
 
@@ -699,7 +720,7 @@ async fn find_missing(
             Some(s) => s,
             None => return Err(Error::Other(format!("missing file {}", name).into())),
         };
-        missing.push(s);
+        missing.push((s.0, "".to_string(), s.1));
     }
     missing.extend(other_files);
     Ok(missing)
@@ -707,17 +728,18 @@ async fn find_missing(
 
 async fn send_missing(
     path: &Path,
-    missing: Vec<(String, u64)>,
+    missing: Vec<(String, String, u64)>,
     sender: &mut (impl Sink<(TabletSnapshotRequest, WriteFlags), Error = Error> + Unpin),
     limiter: &Limiter,
     key_manager: &Option<Arc<DataKeyManager>>,
 ) -> Result<(u64, u64)> {
     let mut total_sent = 0;
     let mut digest = Digest::default();
-    for (name, mut file_size) in missing {
+    for (name, sub_path, mut file_size) in missing {
         let file_path = path.join(&name);
         let mut chunk = TabletSnapshotFileChunk::default();
         chunk.file_name = name;
+        chunk.sub_path = sub_path;
         digest.write(chunk.file_name.as_bytes());
         chunk.file_size = file_size;
         total_sent += file_size;
