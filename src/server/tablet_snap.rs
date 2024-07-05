@@ -622,6 +622,7 @@ async fn build_one_preview(
     Ok(req)
 }
 
+
 async fn find_missing(
     path: &Path,
     mut head: TabletSnapshotRequest,
@@ -638,10 +639,27 @@ async fn find_missing(
         let ft = entry.file_type()?;
         // What if it's titan?
         if !ft.is_file() {
+            // Get titan blob files
+            if entry.file_name().to_str().unwrap().eq("titan") {
+                for blob_f in fs::read_dir(entry.path().as_path()) {
+                    let blob_entry = blob_f?;
+                    let blob_ft = entry.file_type()?;
+                    if !blob_ft.is_file() {
+                        continue;
+                    }
+
+                    let blob_os_name = entry.file_name();
+                    let blob_name = blob_os_name.to_str().unwrap().to_string();
+                    info!("find blob file "; "file name" => blob_name);
+                    let blob_file_size = entry.metadata()?.len();
+                    other_files.push((blob_name, blob_file_size));
+                }
+            }
             continue;
         }
         let os_name = entry.file_name();
         let name = os_name.to_str().unwrap().to_string();
+        info!("find sst file "; "name" => name);
         let file_size = entry.metadata()?.len();
         if is_sst(&name) {
             sst_sizes += file_size;
