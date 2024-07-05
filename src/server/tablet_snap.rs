@@ -641,7 +641,7 @@ async fn find_missing(
         if !ft.is_file() {
             // Get titan blob files
             if entry.file_name().to_str().unwrap().eq("titan") {
-                for blob_f in fs::read_dir(entry.path().as_path()) {
+                for blob_f in fs::read_dir(entry.path().as_path())? {
                     let blob_entry = blob_f?;
                     let blob_ft = entry.file_type()?;
                     if !blob_ft.is_file() {
