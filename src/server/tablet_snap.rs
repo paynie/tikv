@@ -80,7 +80,7 @@ const PREVIEW_BATCH_SIZE: usize = 256;
 const FILE_CHUNK_LEN: usize = ReadableSize::mb(1).0 as usize;
 const USE_CACHE_THRESHOLD: u64 = ReadableSize::mb(4).0;
 
-const TITAN_DIR_NAME: &str = "titan";
+const TITAN_DIR_NAME: &str = "titandb";
 
 fn is_sst(file_name: &str) -> bool {
     file_name.ends_with(".sst")
@@ -657,6 +657,7 @@ async fn find_missing(
         let ft = entry.file_type()?;
         // What if it's titan?
         if !ft.is_file() {
+            info!("find blob file "; "file name" => entry.file_name().to_str().unwrap());
             // Get titan blob files
             if entry.file_name().to_str().unwrap().eq(TITAN_DIR_NAME) {
                 for blob_f in fs::read_dir(entry.path().as_path())? {
