@@ -380,19 +380,19 @@ async fn accept_one_file(
     let name = chunk.file_name;
 
     // Create sub directory if need
-    let sub_path: String = chunk.sub_path;
-    if !sub_path.is_empty() {
-        let sub_dir_path = path.join(&sub_path).as_path();
+    let sub_dir: String = chunk.sub_dir;
+    if !sub_dir.is_empty() {
+        let sub_dir_path = path.join(&sub_dir).as_path();
         if !sub_dir_path.exists() {
             fs::create_dir_all(sub_dir_path)?;
         }
     }
 
     digest.write(name.as_bytes());
-    let path = if sub_path.is_empty() {
+    let path = if sub_dir.is_empty() {
         path.join(&name)
     } else {
-        path.join(&sub_path).join(&name)
+        path.join(&sub_dir).join(&name)
     };
 
     let mut f = OpenOptions::new()
@@ -735,11 +735,11 @@ async fn send_missing(
 ) -> Result<(u64, u64)> {
     let mut total_sent = 0;
     let mut digest = Digest::default();
-    for (name, sub_path, mut file_size) in missing {
+    for (name, sub_dir, mut file_size) in missing {
         let file_path = path.join(&name);
         let mut chunk = TabletSnapshotFileChunk::default();
         chunk.file_name = name;
-        chunk.sub_path = sub_path;
+        chunk.sub_dir = sub_dir;
         digest.write(chunk.file_name.as_bytes());
         chunk.file_size = file_size;
         total_sent += file_size;
