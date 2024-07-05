@@ -382,7 +382,8 @@ async fn accept_one_file(
     // Create sub directory if need
     let sub_dir: String = chunk.sub_dir;
     if !sub_dir.is_empty() {
-        let sub_dir_path = path.join(&sub_dir).as_path();
+        let sub_dir_path_buf = path.join(&sub_dir);
+        let sub_dir_path = sub_dir_path_buf.as_path();
         if !sub_dir_path.exists() {
             fs::create_dir_all(sub_dir_path)?;
         }
@@ -689,7 +690,6 @@ async fn find_missing(
         sender
             .send((head, WriteFlags::default().buffer_hint(true)))
             .await?;
-        let iter = ssts.iter();
 
         for (file_name, file_size) in ssts {
             other_files.push((file_name, "".to_string(), file_size));
