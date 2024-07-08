@@ -499,7 +499,7 @@ async fn accept_missing(
                 };
             }
             res => {
-                info!("Paynie add in recv chuck "; "file " => &name);
+                info!("Paynie add in recv chuck ");
                 return Err(protocol_error("chunk", res));
             }
         };
