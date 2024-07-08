@@ -450,8 +450,8 @@ async fn accept_missing(
     limiter: &Limiter,
     key_manager: &Option<Arc<DataKeyManager>>,
 ) -> Result<u64> {
-    for sst in missing_ssts {
-        info!("Paynie add accept_missing"; "file " => &sst);
+    for sst in &missing_ssts {
+        info!("Paynie add accept_missing"; "file " => sst);
     }
 
     let mut digest = Digest::default();
