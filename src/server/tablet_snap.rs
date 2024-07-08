@@ -662,15 +662,15 @@ async fn find_missing(
             if entry.file_name().to_str().unwrap().eq(TITAN_DIR_NAME) {
                 for blob_f in fs::read_dir(entry.path().as_path())? {
                     let blob_entry = blob_f?;
-                    let blob_ft = entry.file_type()?;
+                    let blob_ft = blob_entry.file_type()?;
                     if !blob_ft.is_file() {
                         continue;
                     }
 
-                    let blob_os_name = entry.file_name();
+                    let blob_os_name = blob_entry.file_name();
                     let blob_name = blob_os_name.to_str().unwrap().to_string();
                     info!("find blob file "; "file name" => &blob_name);
-                    let blob_file_size = entry.metadata()?.len();
+                    let blob_file_size = blob_entry.metadata()?.len();
                     other_files.push((blob_name, TITAN_DIR_NAME.to_string(), blob_file_size));
                 }
             }
