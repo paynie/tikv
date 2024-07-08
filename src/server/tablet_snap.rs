@@ -755,7 +755,7 @@ async fn send_missing(
         let file_path = if sub_dir.is_empty() {
             path.join(&name)
         } else {
-            let sub_path = path.join(sub_dir);
+            let sub_path = path.join(&sub_dir);
             sub_path.join(&name)
         };
 
