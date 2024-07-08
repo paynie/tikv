@@ -432,7 +432,10 @@ async fn accept_one_file(
         }
         chunk = match stream.next().await {
             Some(Ok(mut req)) if req.has_chunk() => req.take_chunk(),
-            res => return Err(protocol_error("chunk", res)),
+            res => {
+                info!("Paynie add accept_one_file recv"; "file path" => path.to_str().unwrap());
+                return Err(protocol_error("chunk", res));
+            },
         };
         if !chunk.file_name.is_empty() {
             return Err(protocol_error(&name, &chunk.file_name));
@@ -447,15 +450,24 @@ async fn accept_missing(
     limiter: &Limiter,
     key_manager: &Option<Arc<DataKeyManager>>,
 ) -> Result<u64> {
+    for sst in missing_ssts {
+        info!("Paynie add accept_missing"; "file " => &sst);
+    }
+
     let mut digest = Digest::default();
     let mut received_bytes: u64 = 0;
     let mut key_importer = key_manager.as_deref().map(|m| DataKeyImporter::new(m));
     for name in missing_ssts {
+        info!("Paynie add accept_missing, start to recv missing ssts"; "file " => &name);
         let chunk = match stream.next().await {
             Some(Ok(mut req)) if req.has_chunk() => req.take_chunk(),
-            res => return Err(protocol_error("chunk", res)),
+            res => {
+                info!("Paynie add accept_missing, recv chunk, req.has_chunk() is false"; "file " => &name);
+                return Err(protocol_error("chunk", res));
+            }
         };
         if chunk.file_name != name {
+            info!("Paynie add accept_missing, start to recv missing ssts, chunk.file_name != name"; "file " => &name);
             return Err(protocol_error(&name, &chunk.file_name));
         }
         received_bytes +=
@@ -486,7 +498,10 @@ async fn accept_missing(
                     Err(protocol_error("None", res))
                 };
             }
-            res => return Err(protocol_error("chunk", res)),
+            res => {
+                info!("Paynie add in recv chuck "; "file " => &name);
+                return Err(protocol_error("chunk", res));
+            }
         };
         if chunk.file_name.is_empty() {
             return Err(protocol_error("file_name", &chunk.file_name));
@@ -737,20 +752,31 @@ async fn send_missing(
     let mut total_sent = 0;
     let mut digest = Digest::default();
     for (name, sub_dir, mut file_size) in missing {
-        let file_path = path.join(&name);
+        let file_path = if sub_dir.is_empty() {
+            path.join(&name)
+        } else {
+            let sub_path = path.join(sub_dir);
+            sub_path.join(&name)
+        };
+
         let mut chunk = TabletSnapshotFileChunk::default();
         chunk.file_name = name;
         chunk.sub_dir = sub_dir;
         digest.write(chunk.file_name.as_bytes());
         chunk.file_size = file_size;
         total_sent += file_size;
+
+        info!("Paynie add start to send file "; "file path" => file_path.to_str().unwrap());
+
         if let Some(m) = key_manager
             && let Some((iv, key)) = m.get_file_internal(file_path.to_str().unwrap())?
         {
+            info!("Paynie add key_manager is valid and get_file_internal ok"; "file path" => file_path.to_str().unwrap());
             chunk.iv = iv;
             chunk.set_key(key);
         }
         if file_size == 0 {
+            info!("Paynie add file_size == 0"; "file path" => file_path.to_str().unwrap());
             let mut req = TabletSnapshotRequest::default();
             req.set_chunk(chunk);
             sender
