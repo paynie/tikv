@@ -598,7 +598,7 @@ impl<EK: KvEngine> Runner<EK> {
             )
         };
         let mut wopts = WriteOptions::default();
-        wopts.set_disable_wal(true);
+        //wopts.set_disable_wal(true);
         let mut written = tablet
             .delete_ranges_cf(&wopts, cf, DeleteStrategy::DeleteFiles, &range)
             .unwrap_or_else(|e| fail_f(e, DeleteStrategy::DeleteFiles));
