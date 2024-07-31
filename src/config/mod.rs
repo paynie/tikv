@@ -1403,7 +1403,7 @@ impl DbConfig {
                     (total_mem * WRITE_BUFFER_MEMORY_LIMIT_RATE) as u64,
                     WRITE_BUFFER_MEMORY_LIMIT_MAX,
                 )));
-                self.max_total_wal_size.get_or_insert(ReadableSize(1));
+                self.max_total_wal_size.get_or_insert(ReadableSize::gb(1));
                 self.stats_dump_period
                     .get_or_insert(ReadableDuration::minutes(0));
                 // In RaftKv2, every region uses its own rocksdb instance, it's actually the
