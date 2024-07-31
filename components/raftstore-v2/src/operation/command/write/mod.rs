@@ -234,6 +234,7 @@ impl<EK: KvEngine, R: ApplyResReporter> Apply<EK, R> {
         start_key: &[u8],
         end_key: &[u8],
         notify_only: bool,
+        use_delete_range: bool,
     ) -> Result<()> {
         PEER_WRITE_CMD_COUNTER.delete_range.inc();
         let off = data_cf_offset(cf);
@@ -275,6 +276,7 @@ impl<EK: KvEngine, R: ApplyResReporter> Apply<EK, R> {
                 Box::new(move |written| {
                     notify.send(written).unwrap();
                 }),
+                use_delete_range,
             );
             if let Err(e) = self.tablet_scheduler().schedule_force(delete_range) {
                 error!(self.logger, "fail to delete range";

@@ -686,6 +686,7 @@ impl<EK: KvEngine, R: ApplyResReporter> Apply<EK, R> {
                                     dr.start_key,
                                     dr.end_key,
                                     dr.notify_only,
+                                    self.use_delete_range,
                                 )
                                 .await?;
                             }

@@ -71,6 +71,7 @@ pub enum Task<EK> {
         start_key: Box<[u8]>,
         end_key: Box<[u8]>,
         cb: Box<dyn FnOnce(bool) + Send>,
+        use_delete_range: bool,
     },
     // Gc snapshot
     SnapGc(Box<[TabletSnapKey]>),
@@ -222,6 +223,7 @@ impl<EK> Task<EK> {
         start_key: Box<[u8]>,
         end_key: Box<[u8]>,
         cb: Box<dyn FnOnce(bool) + Send>,
+        use_delete_range: bool,
     ) -> Self {
         Task::DeleteRange {
             region_id,
@@ -230,6 +232,7 @@ impl<EK> Task<EK> {
             start_key,
             end_key,
             cb,
+            use_delete_range,
         }
     }
 }
@@ -574,10 +577,13 @@ impl<EK: KvEngine> Runner<EK> {
             start_key,
             end_key,
             cb,
+            use_delete_range,
         } = delete_range
         else {
             slog_panic!(self.logger, "unexpected task"; "task" => format!("{}", delete_range))
         };
+
+        info!(self.logger, "Paynie add, in delete range"; "use_delete_range" => use_delete_range);
 
         let range = vec![Range::new(&start_key, &end_key)];
         let fail_f = |e: engine_traits::Error, strategy: DeleteStrategy| {
@@ -597,17 +603,29 @@ impl<EK: KvEngine> Runner<EK> {
             .delete_ranges_cf(&wopts, cf, DeleteStrategy::DeleteFiles, &range)
             .unwrap_or_else(|e| fail_f(e, DeleteStrategy::DeleteFiles));
 
-        let strategy = DeleteStrategy::DeleteByKey;
+        info!(self.logger, "Paynie add, in delete range, after DeleteFiles");
+
+        let strategy = if use_delete_range {
+            info!(self.logger,  "Paynie add, in delete range, use DeleteStrategy::DeleteByRange");
+            DeleteStrategy::DeleteByRange
+        } else {
+            DeleteStrategy::DeleteByKey
+        };
+
+        // let strategy = DeleteStrategy::DeleteByKey;
         // Delete all remaining keys.
         written |= tablet
             .delete_ranges_cf(&wopts, cf, strategy.clone(), &range)
             .unwrap_or_else(move |e| fail_f(e, strategy));
 
-        // TODO: support titan?
-        // tablet
-        //     .delete_ranges_cf(&wopts, cf, DeleteStrategy::DeleteBlobs, &range)
-        //     .unwrap_or_else(move |e| fail_f(e,
-        // DeleteStrategy::DeleteBlobs));
+        info!(self.logger, "Paynie add, in delete range, after DeleteByRange");
+
+        // Support titan
+        written |= tablet
+             .delete_ranges_cf(&wopts, cf, DeleteStrategy::DeleteBlobs, &range)
+             .unwrap_or_else(move |e| fail_f(e, DeleteStrategy::DeleteBlobs));
+
+        info!(self.logger, "Paynie add, in delete range, after DeleteBlobs");
 
         cb(written);
     }

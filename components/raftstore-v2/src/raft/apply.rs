@@ -82,6 +82,7 @@ pub struct Apply<EK: KvEngine, R> {
 
     tablet_scheduler: Scheduler<TabletTask<EK>>,
     high_priority_pool: FuturePool,
+    pub use_delete_range: bool,
 
     pub(crate) metrics: ApplyMetrics,
     pub(crate) logger: Logger,
@@ -116,10 +117,10 @@ impl<EK: KvEngine, R> Apply<EK, R> {
         assert_ne!(applied_index, 0, "{}", SlogFormat(&logger));
         let tablet = remote_tablet.latest().unwrap().clone();
         let perf_context = EK::get_perf_context(cfg.perf_level, PerfContextKind::RaftstoreApply);
-        assert!(
-            !cfg.use_delete_range,
-            "v2 doesn't support RocksDB delete range"
-        );
+        //assert!(
+        //    !cfg.use_delete_range,
+        //    "v2 doesn't support RocksDB delete range"
+        //);
         Apply {
             peer,
             tablet,
@@ -146,6 +147,7 @@ impl<EK: KvEngine, R> Apply<EK, R> {
             sst_importer,
             tablet_scheduler,
             high_priority_pool,
+            use_delete_range: cfg.use_delete_range,
             observe: Observe {
                 info: CmdObserveInfo::default(),
                 level: ObserveLevel::None,

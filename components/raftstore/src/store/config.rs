@@ -954,11 +954,11 @@ impl Config {
             }
         }
         assert!(self.region_compact_check_step.is_some());
-        if raft_kv_v2 && self.use_delete_range {
-            return Err(box_err!(
-                "partitioned-raft-kv doesn't support RocksDB delete range."
-            ));
-        }
+        //if raft_kv_v2 && self.use_delete_range {
+        //    return Err(box_err!(
+        //        "partitioned-raft-kv doesn't support RocksDB delete range."
+        //    ));
+        //}
 
         if self.slow_trend_network_io_factor < 0.0 {
             return Err(box_err!(
