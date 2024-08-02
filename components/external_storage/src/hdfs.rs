@@ -360,13 +360,14 @@ impl ExternalStorage for HdfsStorage {
             }
         }
 
-        // Remove local file
-        tokio::fs::remove_file(&local_file_path_str).await?;
-
         // Check hadoop client jvm return message
         let output = output_ret.unwrap();
         if output.status.success() {
             info!("Push local file to hdfs success"; "local file" => &local_file_path_str, "hdfs file" => path);
+
+            // Remove local file
+            tokio::fs::remove_file(&local_file_path_str).await?;
+
             Ok(())
         } else {
             let stdout = String::from_utf8_lossy(&output.stdout);
@@ -377,6 +378,10 @@ impl ExternalStorage for HdfsStorage {
                 "stdout" => stdout.as_ref(),
                 "stderr" => stderr.as_ref(),
             );
+
+            // Remove local file
+            tokio::fs::remove_file(&local_file_path_str).await?;
+
             Err(io::Error::new(
                 io::ErrorKind::Other,
                 format!("hdfs returned non-zero status: {:?}", output.status.code()),
