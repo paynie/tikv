@@ -152,6 +152,18 @@ impl rocksdb::EventListener for RocksEventListener {
             if err.starts_with("Corruption") {
                 set_panic_mark();
             }
+
+            // Just return for "Shutdown in progress" for partitioned-raft-kv
+            if reason == DBBackgroundErrorReason::Compaction
+                && err.starts_with("Shutdown in progress") {
+                warn!(
+                            "Rocksdb shutdown when do compaction, just return";
+                            "reason" => r,
+                            "err" => &err
+                        );
+                return;
+            }
+
             panic!(
                 "rocksdb background error. db: {}, reason: {}, error: {}",
                 self.db_name, r, err
