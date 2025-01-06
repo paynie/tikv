@@ -83,6 +83,75 @@ impl<E: Engine, L: LockManager, F: KvFormat> RawStorage for RawStorageImpl<'_, E
         Ok(values)
     }
 
+    async fn scan_with_limit(&self, key_range: Range<Key>, limit: usize) -> PluginResult<Vec<KvPair>> {
+        let ctx = self.context.clone();
+        let key_only = false;
+        let reverse = false;
+
+        let res = self.storage.raw_scan(
+            ctx,
+            String::new(),
+            key_range.start,
+            Some(key_range.end),
+            limit,
+            key_only,
+            reverse,
+        );
+
+        let v = res.await.map_err(PluginErrorShim::from)?;
+        let values = extract_kv_pairs(Ok(v))
+            .into_iter()
+            .map(|kv| (kv.key, kv.value))
+            .collect();
+        Ok(values)
+    }
+
+    async fn scan_key_only(&self, key_range: Range<Key>) -> PluginResult<Vec<KvPair>> {
+        let ctx = self.context.clone();
+        let key_only = true;
+        let reverse = false;
+
+        let res = self.storage.raw_scan(
+            ctx,
+            String::new(),
+            key_range.start,
+            Some(key_range.end),
+            usize::MAX,
+            key_only,
+            reverse,
+        );
+
+        let v = res.await.map_err(PluginErrorShim::from)?;
+        let values = extract_kv_pairs(Ok(v))
+            .into_iter()
+            .map(|kv| (kv.key, kv.value))
+            .collect();
+        Ok(values)
+    }
+
+    async fn scan_key_only_with_limit(&self, key_range: Range<Key>, limit: usize) -> PluginResult<Vec<KvPair>> {
+        let ctx = self.context.clone();
+        let key_only = true;
+        let reverse = false;
+
+        let res = self.storage.raw_scan(
+            ctx,
+            String::new(),
+            key_range.start,
+            Some(key_range.end),
+            limit,
+            key_only,
+            reverse,
+        );
+
+        let v = res.await.map_err(PluginErrorShim::from)?;
+        let values = extract_kv_pairs(Ok(v))
+            .into_iter()
+            .map(|kv| (kv.key, kv.value))
+            .collect();
+        Ok(values)
+    }
+
     async fn put(&self, key: Key, value: Value) -> PluginResult<()> {
         let ctx = self.context.clone();
         let ttl = 0; // unlimited

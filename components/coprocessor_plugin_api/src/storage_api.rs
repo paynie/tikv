@@ -35,6 +35,21 @@ pub trait RawStorage {
     /// The upper bound of the `key_range` is exclusive.
     async fn scan(&self, key_range: Range<Key>) -> PluginResult<Vec<KvPair>>;
 
+    /// Same as [`RawStorage::get()`], but accepts a `key_range` such that
+    /// values for keys in `[key_range.start, key_range.end)` are retrieved.
+    /// The upper bound of the `key_range` is exclusive.
+    async fn scan_with_limit(&self, key_range: Range<Key>, limit: usize) -> PluginResult<Vec<KvPair>>;
+
+    /// Same as [`RawStorage::get()`], but accepts a `key_range` such that
+    /// values for keys in `[key_range.start, key_range.end)` are retrieved.
+    /// The upper bound of the `key_range` is exclusive.
+    async fn scan_key_only(&self, key_range: Range<Key>) -> PluginResult<Vec<KvPair>>;
+
+    /// Same as [`RawStorage::get()`], but accepts a `key_range` such that
+    /// values for keys in `[key_range.start, key_range.end)` are retrieved.
+    /// The upper bound of the `key_range` is exclusive.
+    async fn scan_key_only_with_limit(&self, key_range: Range<Key>, limit: usize) -> PluginResult<Vec<KvPair>>;
+
     /// Inserts a new key-value pair into the storage on the current node.
     async fn put(&self, key: Key, value: Value) -> PluginResult<()>;
 

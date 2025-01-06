@@ -219,6 +219,15 @@ pub struct Storage<E: Engine, L: LockManager, F: KvFormat> {
     _phantom: PhantomData<F>,
 }
 
+fn get_next_range(start_key: &Vec<u8>) ->  Vec<u8> {
+    let mut new_start_key = Vec::with_capacity(start_key.len() + 4);
+    for item in start_key {
+        new_start_key.push(*item);
+    }
+    new_start_key.push(0);
+    return new_start_key;
+}
+
 impl<E: Engine, L: LockManager, F: KvFormat> Clone for Storage<E, L, F> {
     #[inline]
     fn clone(&self) -> Self {
@@ -3032,6 +3041,163 @@ impl<E: Engine, L: LockManager, F: KvFormat> Storage<E, L, F> {
                 }
             }
             .in_resource_metering_tag(resource_tag),
+            priority,
+            thread_rng().next_u64(),
+            metadata,
+            resource_limiter,
+        )
+    }
+
+    pub fn count(
+        &self,
+        ctx: Context,
+        cf: String,
+        mut ranges: Vec<KeyRange>,
+        each_limit: usize,
+    ) -> impl Future<Output = Result<i64>> {
+        const CMD: CommandKind = CommandKind::raw_count;
+        let priority = ctx.get_priority();
+        let metadata = TaskMetadata::from_ctx(ctx.get_resource_control_context());
+        let resource_limiter = self.resource_manager.as_ref().and_then(|r| {
+            r.get_resource_limiter(
+                ctx.get_resource_control_context().get_resource_group_name(),
+                ctx.get_request_source(),
+                ctx.get_resource_control_context().get_override_priority(),
+            )
+        });
+        let priority_tag = get_priority_tag(priority);
+        let key_ranges = ranges
+            .iter()
+            .map(|key_range| (key_range.start_key.clone(), key_range.end_key.clone()))
+            .collect();
+        let resource_tag = self
+            .resource_tag_factory
+            .new_tag_with_key_ranges(&ctx, key_ranges);
+        let api_version = self.api_version;
+        let busy_threshold = Duration::from_millis(ctx.busy_threshold_ms as u64);
+
+        self.read_pool_spawn_with_busy_check(
+            busy_threshold,
+            async move {
+                KV_COMMAND_COUNTER_VEC_STATIC.get(CMD).inc();
+                SCHED_COMMANDS_PRI_COUNTER_VEC_STATIC
+                    .get(priority_tag)
+                    .inc();
+
+                Self::check_api_version_ranges(
+                    api_version,
+                    ctx.api_version,
+                    CMD,
+                    ranges
+                        .iter()
+                        .map(|range| (Some(range.get_start_key()), Some(range.get_end_key()))),
+                )?;
+
+                let command_duration = Instant::now();
+                let snap_ctx = SnapContext {
+                    pb_ctx: &ctx,
+                    ..Default::default()
+                };
+                let snapshot =
+                    Self::with_tls_engine(|engine| Self::snapshot(engine, snap_ctx)).await?;
+                let buckets = snapshot.ext().get_buckets();
+                let cf = Self::rawkv_cf(&cf, api_version)?;
+                {
+                    let store = RawStore::new(snapshot, api_version);
+                    let begin_instant = Instant::now();
+                    let mut statistics = Statistics::default();
+                    if !Self::check_key_ranges(&ranges, false) {
+                        return Err(box_err!("Invalid KeyRanges"));
+                    };
+                    let mut result = 0;
+                    let mut key_ranges = vec![];
+                    let ranges_len = ranges.len();
+
+                    for i in 0..ranges_len {
+                        let mut start_key = F::encode_raw_key_owned(ranges[i].take_start_key(), None);
+                        let end_key = ranges[i].take_end_key();
+                        let end_key = if end_key.is_empty() {
+                            if i + 1 == ranges_len {
+                                None
+                            } else {
+                                Some(F::encode_raw_key(ranges[i + 1].get_start_key(), None))
+                            }
+                        } else {
+                            Some(F::encode_raw_key_owned(end_key, None))
+                        };
+                        let mut stats = Statistics::default();
+
+                        loop {
+                            let pairs: Vec<Result<KvPair>> = store
+                                .forward_raw_scan(
+                                    cf,
+                                    &start_key,
+                                    end_key.as_ref(),
+                                    each_limit,
+                                    &mut stats,
+                                    true,
+                                )
+                                .await
+                                .map(|pairs| {
+                                    pairs
+                                        .into_iter()
+                                        .map(|pair| {
+                                            pair.map(|(k, v)| {
+                                                (k, v)
+                                            })
+                                                .map_err(Error::from)
+                                        })
+                                        .collect()
+                                }).map_err(Error::from)?;
+
+                            key_ranges.push(build_key_range(
+                                start_key.as_encoded(),
+                                end_key.as_ref().map(|k| k.as_encoded()).unwrap_or(&vec![]),
+                                false,
+                            ));
+                            metrics::tls_collect_read_flow(
+                                ctx.get_region_id(),
+                                Some(start_key.as_encoded()),
+                                end_key.as_ref().map(|k| k.as_encoded().as_slice()),
+                                &stats,
+                                buckets.as_ref(),
+                            );
+                            statistics.add(&stats);
+
+                            if pairs.is_empty() {
+                                break;
+                            }
+
+                            start_key = F::encode_raw_key_owned(
+                                get_next_range(
+                                    pairs.last().as_ref().unwrap().as_ref().unwrap().0.as_ref()), None);
+                            result += pairs.len() as i64;
+                        }
+                    }
+
+                    tls_collect_query_batch(
+                        ctx.get_region_id(),
+                        ctx.get_peer(),
+                        key_ranges,
+                        QueryKind::Scan,
+                    );
+                    KV_COMMAND_KEYREAD_HISTOGRAM_STATIC
+                        .get(CMD)
+                        .observe(statistics.data.flow_stats.read_keys as f64);
+                    metrics::tls_collect_scan_details(CMD, &statistics);
+                    let now = Instant::now();
+                    SCHED_PROCESSING_READ_HISTOGRAM_STATIC
+                        .get(CMD)
+                        .observe(duration_to_sec(
+                            now.saturating_duration_since(begin_instant),
+                        ));
+                    SCHED_HISTOGRAM_VEC_STATIC.get(CMD).observe(duration_to_sec(
+                        now.saturating_duration_since(command_duration),
+                    ));
+                    Ok(result)
+                }
+            }
+                .in_resource_metering_tag(resource_tag),
             priority,
             thread_rng().next_u64(),
             metadata,

@@ -18,6 +18,8 @@ use futures::{
     sink::SinkExt,
     stream::{StreamExt, TryStreamExt},
 };
+use futures_executor::block_on;
+use futures_util::AsyncWriteExt;
 use grpcio::{
     ClientStreamingSink, DuplexSink, Error as GrpcError, RequestStream, Result as GrpcResult,
     RpcContext, RpcStatus, RpcStatusCode, ServerStreamingSink, UnarySink, WriteFlags,
@@ -46,7 +48,6 @@ use tikv_util::{
 };
 use tracker::{set_tls_tracker_token, RequestInfo, RequestType, Tracker, GLOBAL_TRACKERS};
 use txn_types::{self, Key};
-
 use super::batch::{BatcherBuilder, ReqBatcher};
 use crate::{
     coprocessor::Endpoint,
@@ -402,6 +403,14 @@ impl<E: Engine, L: LockManager, F: KvFormat> Tikv for Service<E, L, F> {
         RawBatchScanRequest,
         RawBatchScanResponse
     );
+
+    handle_request!(
+        raw_count,
+        future_raw_count,
+        RawCountRequest,
+        RawCountResponse
+    );
+
     handle_request!(raw_put, future_raw_put, RawPutRequest, RawPutResponse);
     handle_request!(
         raw_batch_put,
@@ -1440,6 +1449,7 @@ fn handle_batch_commands_request<E: Engine, L: LockManager, F: KvFormat>(
         RawScan, future_raw_scan(storage), raw_scan;
         RawDeleteRange, future_raw_delete_range(storage), raw_delete_range;
         RawBatchScan, future_raw_batch_scan(storage), raw_batch_scan;
+        RawCount, future_raw_count(storage), raw_count;
         RawCoprocessor, future_raw_coprocessor(copr_v2, storage), coprocessor;
         PessimisticLock, future_acquire_pessimistic_lock(storage), kv_pessimistic_lock;
         PessimisticRollback, future_pessimistic_rollback(storage), kv_pessimistic_rollback;
@@ -2149,6 +2159,27 @@ fn future_raw_batch_scan<E: Engine, L: LockManager, F: KvFormat>(
             resp.set_kvs(extract_kv_pairs(v).into());
         }
         Ok(resp)
+    }
+}
+
+
+fn future_raw_count<E: Engine, L: LockManager, F: KvFormat>(
+    storage: &Storage<E, L, F>,
+    mut req: RawCountRequest,
+) -> impl Future<Output = ServerResult<RawCountResponse>> {
+    info!("Start count");
+    let v = storage.count(
+        req.take_context(),
+        req.take_cf(),
+        req.take_ranges().into(),
+        req.get_each_limit() as usize,
+    );
+
+    async move {
+        let v = v.await;
+        let mut response = RawCountResponse::default();
+        response.set_count(v.unwrap());
+        Ok(response)
     }
 }
 
