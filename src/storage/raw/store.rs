@@ -112,7 +112,7 @@ impl<'a, S: Snapshot> RawStore<S> {
         limit: usize,
         statistics: &'a mut Statistics,
         key_only: bool,
-        titan_enable: bool,
+        enable_titan: bool,
     ) -> Result<Vec<Result<KvPair>>> {
         let mut option = IterOptions::default();
         if let Some(end) = end_key {
@@ -129,7 +129,7 @@ impl<'a, S: Snapshot> RawStore<S> {
             }
 
             RawStore::V1Ttl(inner) => {
-                if key_only && titan_enable {
+                if key_only && enable_titan {
                     option.set_key_only(key_only);
                 }
 

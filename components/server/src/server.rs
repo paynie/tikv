@@ -707,6 +707,7 @@ where
                 .as_ref()
                 .map(|m| m.derive_controller("scheduler-worker-pool".to_owned(), true)),
             self.resource_manager.clone(),
+            self.core.config.rocksdb.titan.enabled.unwrap(),
         )
         .unwrap_or_else(|e| fatal!("failed to create raft storage: {}", e));
         cfg_controller.register(
@@ -874,7 +875,6 @@ where
             debug_thread_pool,
             health_controller,
             self.resource_manager.clone(),
-            titan_enable,
         )
         .unwrap_or_else(|e| fatal!("failed to create server: {}", e));
         cfg_controller.register(

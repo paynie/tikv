@@ -217,6 +217,7 @@ pub struct Storage<E: Engine, L: LockManager, F: KvFormat> {
     resource_manager: Option<Arc<ResourceGroupManager>>,
 
     _phantom: PhantomData<F>,
+    enable_titan: bool,
 }
 
 fn get_next_range(start_key: &Vec<u8>) ->  Vec<u8> {
@@ -250,6 +251,7 @@ impl<E: Engine, L: LockManager, F: KvFormat> Clone for Storage<E, L, F> {
             quota_limiter: self.quota_limiter.clone(),
             resource_manager: self.resource_manager.clone(),
             _phantom: PhantomData,
+            enable_titan: self.enable_titan,
         }
     }
 }
@@ -288,6 +290,7 @@ impl<E: Engine, L: LockManager, F: KvFormat> Storage<E, L, F> {
         causal_ts_provider: Option<Arc<CausalTsProviderImpl>>,
         resource_ctl: Option<Arc<ResourceController>>,
         resource_manager: Option<Arc<ResourceGroupManager>>,
+        enable_titan: bool,
     ) -> Result<Self> {
         assert_eq!(config.api_version(), F::TAG, "Api version not match");
 
@@ -322,6 +325,7 @@ impl<E: Engine, L: LockManager, F: KvFormat> Storage<E, L, F> {
             quota_limiter,
             resource_manager,
             _phantom: PhantomData,
+            enable_titan,
         })
     }
 
@@ -3056,7 +3060,6 @@ impl<E: Engine, L: LockManager, F: KvFormat> Storage<E, L, F> {
         cf: String,
         mut ranges: Vec<KeyRange>,
         each_limit: usize,
-        titan_enable: bool,
     ) -> impl Future<Output = Result<i64>> {
         const CMD: CommandKind = CommandKind::raw_count;
         let priority = ctx.get_priority();
@@ -3078,6 +3081,7 @@ impl<E: Engine, L: LockManager, F: KvFormat> Storage<E, L, F> {
             .new_tag_with_key_ranges(&ctx, key_ranges);
         let api_version = self.api_version;
         let busy_threshold = Duration::from_millis(ctx.busy_threshold_ms as u64);
+        let enable_titan = self.enable_titan;
 
         self.read_pool_spawn_with_busy_check(
             busy_threshold,
@@ -3132,13 +3136,14 @@ impl<E: Engine, L: LockManager, F: KvFormat> Storage<E, L, F> {
 
                         loop {
                             let pairs: Vec<Result<KvPair>> = store
-                                .forward_raw_scan(
+                                .forward_raw_scan_v2(
                                     cf,
                                     &start_key,
                                     end_key.as_ref(),
                                     each_limit,
                                     &mut stats,
                                     true,
+                                    enable_titan,
                                 )
                                 .await
                                 .map(|pairs| {
@@ -3238,6 +3243,7 @@ impl<E: Engine, L: LockManager, F: KvFormat> Storage<E, L, F> {
             .new_tag_with_key_ranges(&ctx, key_ranges);
         let api_version = self.api_version;
         let busy_threshold = Duration::from_millis(ctx.busy_threshold_ms as u64);
+        let enable_titan = self.enable_titan;
 
         self.read_pool_spawn_with_busy_check(
             busy_threshold,
@@ -3286,13 +3292,14 @@ impl<E: Engine, L: LockManager, F: KvFormat> Storage<E, L, F> {
                     let mut stats = Statistics::default();
 
                     let pairs: Vec<Result<KvPair>> = store
-                        .forward_raw_scan(
+                        .forward_raw_scan_v2(
                             cf,
                             &start_key,
                             end_key.as_ref(),
                             each_limit,
                             &mut stats,
                             true,
+                            enable_titan,
                         )
                         .await
                         .map(|pairs| {
@@ -4093,6 +4100,7 @@ impl<E: Engine, L: LockManager, F: KvFormat> TestStorageBuilder<E, L, F> {
             ts_provider,
             Some(resource_ctl),
             Some(manager),
+            true,
         )
     }
 
@@ -4126,6 +4134,7 @@ impl<E: Engine, L: LockManager, F: KvFormat> TestStorageBuilder<E, L, F> {
             None,
             Some(resource_ctl),
             Some(manager),
+            true,
         )
     }
 
@@ -4162,6 +4171,7 @@ impl<E: Engine, L: LockManager, F: KvFormat> TestStorageBuilder<E, L, F> {
             None,
             Some(resource_controller),
             Some(resource_manager),
+            true,
         )
     }
 }

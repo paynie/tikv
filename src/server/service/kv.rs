@@ -103,7 +103,6 @@ pub struct Service<E: Engine, L: LockManager, F: KvFormat> {
     health_controller: HealthController,
     health_feedback_interval: Option<Duration>,
     health_feedback_seq: Arc<AtomicU64>,
-    titan_enable: bool,
 }
 
 impl<E: Engine, L: LockManager, F: KvFormat> Drop for Service<E, L, F> {
@@ -131,7 +130,6 @@ impl<E: Engine + Clone, L: LockManager + Clone, F: KvFormat> Clone for Service<E
             health_controller: self.health_controller.clone(),
             health_feedback_seq: self.health_feedback_seq.clone(),
             health_feedback_interval: self.health_feedback_interval,
-            titan_enable: self.titan_enable,
         }
     }
 }
@@ -154,7 +152,6 @@ impl<E: Engine, L: LockManager, F: KvFormat> Service<E, L, F> {
         resource_manager: Option<Arc<ResourceGroupManager>>,
         health_controller: HealthController,
         health_feedback_interval: Option<Duration>,
-        titan_enable: bool,
     ) -> Self {
         let now_unix = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -177,7 +174,6 @@ impl<E: Engine, L: LockManager, F: KvFormat> Service<E, L, F> {
             health_controller,
             health_feedback_interval,
             health_feedback_seq: Arc::new(AtomicU64::new(now_unix)),
-            titan_enable,
         }
     }
 
