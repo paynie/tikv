@@ -139,6 +139,7 @@ pub struct Server<S: StoreAddrResolver + 'static, E: Engine> {
     health_controller: HealthController,
     timer: Handle,
     builder_factory: Box<dyn GrpcBuilderFactory>,
+    titan_enable: bool,
 }
 
 impl<S, E> Server<S, E>
@@ -164,6 +165,7 @@ where
         debug_thread_pool: Arc<Runtime>,
         health_controller: HealthController,
         resource_manager: Option<Arc<ResourceGroupManager>>,
+        titan_enable: bool,
     ) -> Result<Self> {
         // A helper thread (or pool) for transport layer.
         let stats_pool = if cfg.value().stats_concurrency > 0 {
@@ -193,6 +195,7 @@ where
         };
 
         let proxy = Proxy::new(security_mgr.clone(), &env, Arc::new(cfg.value().clone()));
+
         let kv_service = KvService::new(
             cfg.value().cluster_id,
             store_id,
@@ -209,6 +212,7 @@ where
             resource_manager,
             health_controller.clone(),
             health_feedback_interval,
+            titan_enable,
         );
         let builder_factory = Box::new(BuilderFactory::new(
             kv_service,
@@ -251,6 +255,7 @@ where
             health_controller,
             timer: GLOBAL_TIMER_HANDLE.clone(),
             builder_factory,
+            titan_enable,
         };
 
         Ok(svr)

@@ -43,6 +43,7 @@ make_auto_flush_static_metric! {
         raw_scan,
         raw_batch_scan,
         raw_count,
+        raw_count_v2,
         raw_put,
         raw_batch_put,
         raw_batch_write,

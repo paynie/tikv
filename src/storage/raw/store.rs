@@ -90,7 +90,49 @@ impl<'a, S: Snapshot> RawStore<S> {
                     .forward_raw_scan(cf, start_key, limit, statistics, option, key_only)
                     .await
             }
+
             RawStore::V1Ttl(inner) => {
+                inner
+                    .forward_raw_scan(cf, start_key, limit, statistics, option, key_only)
+                    .await
+            }
+            RawStore::V2(inner) => {
+                inner
+                    .forward_raw_scan(cf, start_key, limit, statistics, option, key_only)
+                    .await
+            }
+        }
+    }
+
+    pub async fn forward_raw_scan_v2(
+        &'a self,
+        cf: CfName,
+        start_key: &'a Key,
+        end_key: Option<&'a Key>,
+        limit: usize,
+        statistics: &'a mut Statistics,
+        key_only: bool,
+        titan_enable: bool,
+    ) -> Result<Vec<Result<KvPair>>> {
+        let mut option = IterOptions::default();
+        if let Some(end) = end_key {
+            option.set_upper_bound(end.as_encoded(), DATA_KEY_PREFIX_LEN);
+        }
+        match self {
+            RawStore::V1(inner) => {
+                if key_only {
+                    option.set_key_only(key_only);
+                }
+                inner
+                    .forward_raw_scan(cf, start_key, limit, statistics, option, key_only)
+                    .await
+            }
+
+            RawStore::V1Ttl(inner) => {
+                if key_only && titan_enable {
+                    option.set_key_only(key_only);
+                }
+
                 inner
                     .forward_raw_scan(cf, start_key, limit, statistics, option, key_only)
                     .await

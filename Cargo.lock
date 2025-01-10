@@ -2853,7 +2853,7 @@ dependencies = [
 [[package]]
 name = "kvproto"
 version = "0.0.2"
-source = "git+https://github.com/paynie/kvproto?branch=easygraph-8.1#6186a16750e8007a8b537160dfeb6a6e2e40f995"
+source = "git+https://github.com/paynie/kvproto?branch=easygraph-8.1#d88b3798322219a626a7c344062d9d9f08671d83"
 dependencies = [
  "futures 0.3.15",
  "grpcio",

@@ -87,12 +87,12 @@ use kvproto::{
     },
     pdpb::QueryKind,
 };
-
 use kvproto::kvrpcpb::Op::Del;
 
 use pd_client::FeatureGate;
 use raftstore::store::{util::build_key_range, ReadStats, TxnExt, WriteStats};
 use rand::prelude::*;
+
 use resource_control::{ResourceController, ResourceGroupManager, ResourceLimiter, TaskMetadata};
 use resource_metering::{FutureExt, ResourceTagFactory};
 use tikv_kv::{OnAppliedCb, SnapshotExt};
@@ -451,6 +451,8 @@ impl<E: Engine, L: LockManager, F: KvFormat> Storage<E, L, F> {
                 | CommandKind::raw_batch_delete
                 | CommandKind::raw_get_key_ttl
                 | CommandKind::raw_set_key_ttl
+                | CommandKind::raw_count
+                | CommandKind::raw_count_v2
                 | CommandKind::raw_compare_and_swap
                 | CommandKind::raw_atomic_store
                 | CommandKind::raw_checksum
@@ -3054,6 +3056,7 @@ impl<E: Engine, L: LockManager, F: KvFormat> Storage<E, L, F> {
         cf: String,
         mut ranges: Vec<KeyRange>,
         each_limit: usize,
+        titan_enable: bool,
     ) -> impl Future<Output = Result<i64>> {
         const CMD: CommandKind = CommandKind::raw_count;
         let priority = ctx.get_priority();
@@ -3195,6 +3198,160 @@ impl<E: Engine, L: LockManager, F: KvFormat> Storage<E, L, F> {
                         now.saturating_duration_since(command_duration),
                     ));
                     Ok(result)
+                }
+            }
+                .in_resource_metering_tag(resource_tag),
+            priority,
+            thread_rng().next_u64(),
+            metadata,
+            resource_limiter,
+        )
+    }
+
+    pub fn count_v2(
+        &self,
+        ctx: Context,
+        cf: String,
+        range: KeyRange,
+        each_limit: usize,
+    ) -> impl Future<Output = Result<(i64, Vec<u8>)>> {
+        let mut ranges: Vec<KeyRange> = Vec::new();
+        ranges.push(range.clone());
+
+        const CMD: CommandKind = CommandKind::raw_count_v2;
+        let priority = ctx.get_priority();
+        let metadata = TaskMetadata::from_ctx(ctx.get_resource_control_context());
+        let resource_limiter = self.resource_manager.as_ref().and_then(|r| {
+            r.get_resource_limiter(
+                ctx.get_resource_control_context().get_resource_group_name(),
+                ctx.get_request_source(),
+                ctx.get_resource_control_context().get_override_priority(),
+            )
+        });
+        let priority_tag = get_priority_tag(priority);
+        let key_ranges = ranges
+            .iter()
+            .map(|key_range| (key_range.start_key.clone(), key_range.end_key.clone()))
+            .collect();
+        let resource_tag = self
+            .resource_tag_factory
+            .new_tag_with_key_ranges(&ctx, key_ranges);
+        let api_version = self.api_version;
+        let busy_threshold = Duration::from_millis(ctx.busy_threshold_ms as u64);
+
+        self.read_pool_spawn_with_busy_check(
+            busy_threshold,
+            async move {
+                KV_COMMAND_COUNTER_VEC_STATIC.get(CMD).inc();
+                SCHED_COMMANDS_PRI_COUNTER_VEC_STATIC
+                    .get(priority_tag)
+                    .inc();
+
+                Self::check_api_version_ranges(
+                    api_version,
+                    ctx.api_version,
+                    CMD,
+                    ranges
+                        .iter()
+                        .map(|range| (Some(range.get_start_key()), Some(range.get_end_key()))),
+                )?;
+
+                let command_duration = Instant::now();
+                let snap_ctx = SnapContext {
+                    pb_ctx: &ctx,
+                    ..Default::default()
+                };
+                let snapshot =
+                    Self::with_tls_engine(|engine| Self::snapshot(engine, snap_ctx)).await?;
+                let buckets = snapshot.ext().get_buckets();
+                let cf = Self::rawkv_cf(&cf, api_version)?;
+                {
+                    let store = RawStore::new(snapshot, api_version);
+                    let begin_instant = Instant::now();
+                    let mut statistics = Statistics::default();
+                    if !Self::check_key_ranges(&ranges, false) {
+                        return Err(box_err!("Invalid KeyRanges"));
+                    };
+
+                    let mut key_ranges = vec![];
+
+                    let mut start_key = F::encode_raw_key_owned(ranges[0].take_start_key(), None);
+                    let end_key = ranges[0].take_end_key();
+                    let end_key = if end_key.is_empty() {
+                        None
+                    } else {
+                        Some(F::encode_raw_key_owned(end_key, None))
+                    };
+
+                    let mut stats = Statistics::default();
+
+                    let pairs: Vec<Result<KvPair>> = store
+                        .forward_raw_scan(
+                            cf,
+                            &start_key,
+                            end_key.as_ref(),
+                            each_limit,
+                            &mut stats,
+                            true,
+                        )
+                        .await
+                        .map(|pairs| {
+                            pairs
+                                .into_iter()
+                                .map(|pair| {
+                                    pair.map(|(k, v)| {
+                                        (k, v)
+                                    }).map_err(Error::from)
+                                })
+                                .collect()
+                        }).map_err(Error::from)?;
+
+                    key_ranges.push(build_key_range(
+                        start_key.as_encoded(),
+                        end_key.as_ref().map(|k| k.as_encoded()).unwrap_or(&vec![]),
+                        false,
+                    ));
+
+                    metrics::tls_collect_read_flow(
+                        ctx.get_region_id(),
+                        Some(start_key.as_encoded()),
+                        end_key.as_ref().map(|k| k.as_encoded().as_slice()),
+                        &stats,
+                        buckets.as_ref(),
+                    );
+                    statistics.add(&stats);
+
+                    tls_collect_query_batch(
+                        ctx.get_region_id(),
+                        ctx.get_peer(),
+                        key_ranges,
+                        QueryKind::Scan,
+                    );
+                    KV_COMMAND_KEYREAD_HISTOGRAM_STATIC
+                        .get(CMD)
+                        .observe(statistics.data.flow_stats.read_keys as f64);
+                    metrics::tls_collect_scan_details(CMD, &statistics);
+                    let now = Instant::now();
+                    SCHED_PROCESSING_READ_HISTOGRAM_STATIC
+                        .get(CMD)
+                        .observe(duration_to_sec(
+                            now.saturating_duration_since(begin_instant),
+                        ));
+                    SCHED_HISTOGRAM_VEC_STATIC.get(CMD).observe(duration_to_sec(
+                        now.saturating_duration_since(command_duration),
+                    ));
+
+                    let result_num: i64 = pairs.len() as i64;
+                    let last_key: Vec<u8> = if pairs.len() >= each_limit {
+                         match pairs.last().as_ref().unwrap() {
+                            Ok(kv) => kv.0.clone(),
+                            Err(e) => Vec::new()
+                        }
+                    } else {
+                        Vec::new()
+                    };
+
+                    return Ok((result_num, last_key))
                 }
             }
                 .in_resource_metering_tag(resource_tag),

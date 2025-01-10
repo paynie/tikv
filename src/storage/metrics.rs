@@ -164,6 +164,7 @@ make_auto_flush_static_metric! {
         raw_atomic_store,
         raw_checksum,
         raw_count,
+        raw_count_v2,
     }
 
     pub label_enum CommandStageKind {

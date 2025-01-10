@@ -820,6 +820,7 @@ where
             .start("check-leader", check_leader_runner);
 
         let server_config = Arc::new(VersionTrack::new(self.core.config.server.clone()));
+        let titan_enable = self.core.config.rocksdb.titan.enabled.unwrap();
 
         self.core.config.raft_store.optimize_for(false);
         self.core
@@ -873,6 +874,7 @@ where
             debug_thread_pool,
             health_controller,
             self.resource_manager.clone(),
+            titan_enable,
         )
         .unwrap_or_else(|e| fatal!("failed to create server: {}", e));
         cfg_controller.register(

@@ -25,7 +25,7 @@ use grpcio::{
     RpcContext, RpcStatus, RpcStatusCode, ServerStreamingSink, UnarySink, WriteFlags,
 };
 use health_controller::HealthController;
-use kvproto::{coprocessor::*, kvrpcpb::*, mpp::*, raft_serverpb::*, tikvpb::*};
+use kvproto::{coprocessor::*, errorpb, kvrpcpb::*, kvrpcpb, mpp::*, raft_serverpb::*, tikvpb::*};
 use protobuf::RepeatedField;
 use raft::eraftpb::MessageType;
 use raftstore::{
@@ -103,6 +103,7 @@ pub struct Service<E: Engine, L: LockManager, F: KvFormat> {
     health_controller: HealthController,
     health_feedback_interval: Option<Duration>,
     health_feedback_seq: Arc<AtomicU64>,
+    titan_enable: bool,
 }
 
 impl<E: Engine, L: LockManager, F: KvFormat> Drop for Service<E, L, F> {
@@ -130,6 +131,7 @@ impl<E: Engine + Clone, L: LockManager + Clone, F: KvFormat> Clone for Service<E
             health_controller: self.health_controller.clone(),
             health_feedback_seq: self.health_feedback_seq.clone(),
             health_feedback_interval: self.health_feedback_interval,
+            titan_enable: self.titan_enable,
         }
     }
 }
@@ -152,6 +154,7 @@ impl<E: Engine, L: LockManager, F: KvFormat> Service<E, L, F> {
         resource_manager: Option<Arc<ResourceGroupManager>>,
         health_controller: HealthController,
         health_feedback_interval: Option<Duration>,
+        titan_enable: bool,
     ) -> Self {
         let now_unix = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -174,6 +177,7 @@ impl<E: Engine, L: LockManager, F: KvFormat> Service<E, L, F> {
             health_controller,
             health_feedback_interval,
             health_feedback_seq: Arc::new(AtomicU64::new(now_unix)),
+            titan_enable,
         }
     }
 
@@ -409,6 +413,13 @@ impl<E: Engine, L: LockManager, F: KvFormat> Tikv for Service<E, L, F> {
         future_raw_count,
         RawCountRequest,
         RawCountResponse
+    );
+
+    handle_request!(
+        raw_count_v2,
+        future_raw_count_v2,
+        RawCountRequestV2,
+        RawCountResponseV2
     );
 
     handle_request!(raw_put, future_raw_put, RawPutRequest, RawPutResponse);
@@ -1450,6 +1461,7 @@ fn handle_batch_commands_request<E: Engine, L: LockManager, F: KvFormat>(
         RawDeleteRange, future_raw_delete_range(storage), raw_delete_range;
         RawBatchScan, future_raw_batch_scan(storage), raw_batch_scan;
         RawCount, future_raw_count(storage), raw_count;
+        RawCountV2, future_raw_count_v2(storage), raw_count_v2;
         RawCoprocessor, future_raw_coprocessor(copr_v2, storage), coprocessor;
         PessimisticLock, future_acquire_pessimistic_lock(storage), kv_pessimistic_lock;
         PessimisticRollback, future_pessimistic_rollback(storage), kv_pessimistic_rollback;
@@ -2177,9 +2189,60 @@ fn future_raw_count<E: Engine, L: LockManager, F: KvFormat>(
 
     async move {
         let v = v.await;
-        let mut response = RawCountResponse::default();
-        response.set_count(v.unwrap());
-        Ok(response)
+        let mut resp = RawCountResponse::default();
+
+        if let Some(err) = extract_region_error(&v) {
+            resp.set_region_error(err);
+        } else {
+            //resp.set_count(v.unwrap());
+            match v {
+                Ok(res) => resp.set_count(res),
+                Err(e) => {
+                    error!("raw count failed");
+                }
+            }
+        }
+        Ok(resp)
+    }
+}
+
+fn future_raw_count_v2<E: Engine, L: LockManager, F: KvFormat>(
+    storage: &Storage<E, L, F>,
+    mut req: RawCountRequestV2,
+) -> impl Future<Output = ServerResult<RawCountResponseV2>> {
+    info!("Start count");
+    let v = storage.count_v2(
+        req.take_context(),
+        req.take_cf(),
+        req.take_range(),
+        req.get_each_limit() as usize,
+    );
+
+    async move {
+        let v = v.await;
+        let mut resp = RawCountResponseV2::default();
+
+        if let Some(err) = extract_region_error(&v) {
+            resp.set_region_error(err);
+        } else {
+            //resp.set_count(v.unwrap());
+            match v {
+                Ok(res) => {
+                    resp.set_count(res.0);
+                    resp.set_last_key(res.1.clone());
+                    if res.0 >= req.each_limit as i64 && res.1.len() == 0 {
+                        // Error
+                        resp.set_error(String::from("Last key failed"));
+                    }
+                }
+                Err(e) => {
+                    error!("raw count failed");
+                    // Error
+                    resp.set_error(e.to_string());
+                }
+            }
+        }
+        Ok(resp)
     }
 }
 
