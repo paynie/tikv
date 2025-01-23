@@ -2310,6 +2310,7 @@ version = "0.1.4"
 dependencies = [
  "coprocessor_plugin_api",
  "futures 0.3.15",
+ "kvproto",
  "lazy_static",
  "protobuf 3.7.1",
  "slog",
@@ -2853,7 +2854,7 @@ dependencies = [
 [[package]]
 name = "kvproto"
 version = "0.0.2"
-source = "git+https://github.com/paynie/kvproto?branch=easygraph-8.1#d88b3798322219a626a7c344062d9d9f08671d83"
+source = "git+https://github.com/paynie/kvproto?branch=easygraph-8.1#333c922b49b532f363a198205da8b9d561826340"
 dependencies = [
  "futures 0.3.15",
  "grpcio",
